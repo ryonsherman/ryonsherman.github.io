@@ -1,4 +1,4 @@
-build:
+all:
 	cd ../ && ./noise.py build live
 release: build
 	cp -r build/* release/
