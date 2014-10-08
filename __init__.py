@@ -10,4 +10,3 @@ def index(page):
         'title': "Noise: Make Some!",
         'body':  "Hello World"
     })
-
