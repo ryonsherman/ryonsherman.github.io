@@ -10,7 +10,7 @@ GitHub's [Jekyll] project seems interesting but I'm not as familiar with [Ruby] 
 
 I enjoy simplicity and level of understanding of my code. So, I've decided to create a platform of my own - implementing elements familiar to me. This blog will chronicle its development from inception to everyday use.
 
-I've dubbed this application *"**Noise** - a static webpage generator.*
+I've dubbed this application _"**Noise** - a static webpage generator._
 
 #### Source Code
 
