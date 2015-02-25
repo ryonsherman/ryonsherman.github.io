@@ -152,7 +152,7 @@ The module can be found [here][Path] and provides the following functionality:
 /tmp/build/bar.txt
 ```
 
-##### Application Initialization
+#### Application Initialization
 
 We'll create two placeholder methods to emulate the init/build actions:
 
@@ -212,7 +212,7 @@ blog
 `-- template
 ```
 
-###### Project Boilerplate
+##### Project Boilerplate
 
 Projects are actually Python [modules][Python-modules] themselves. As mentioned, [Flask] style [routes][Flask-routes] are used to manipulate the generation of files intended to serve a given URL.
 
@@ -261,7 +261,7 @@ blog
 `-- template
 ```
 
-##### Building the Project
+#### Building the Project
 
 The project module is imported its application [build()][Noise-build] method is called:
 
@@ -279,7 +279,7 @@ def main():
 
 The build method handles static resources and the rendering of pages.
 
-###### Handling Static Resources
+##### Handling Static Resources
 
 Static resources are copied from the static directory to the build directory:
 
@@ -301,7 +301,7 @@ class Noise(object):
         else: os.mkdir(build_path)
 ```
 
-###### Rendering Pages
+##### Rendering Pages
 
 The `Page` object handles rendering file to the build directory. Its development can be followed in a [supplimental post][blog-routespages] and its module may be found [here][Page].
 
