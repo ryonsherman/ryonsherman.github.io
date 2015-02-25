@@ -303,9 +303,9 @@ class Noise(object):
 
 ##### Rendering Pages
 
-The `Page` object handles rendering file to the build directory. Its development can be followed in a [supplimental post][blog-routespages] and its module may be found [here][Page].
+The `Page` object handles the rendering files to the build directory. Its development can be followed in a [supplimental post][blog-routespages] and its module may be found [here][Page].
 
-The '[route]' [decorator](https://www.python.org/dev/peps/pep-0318) adds the callback methods defined in the project initialization file to a list of the application's routes. The [build()][Noise-build] method then creates [Page] objects for these routes and performs said callback:
+The '[route]' [decorator](https://www.python.org/dev/peps/pep-0318) adds the callback methods defined in the project initialization file to a list of the application's routes. The [build()][Noise-build] method then creates `Page` objects for these routes and performs said callback:
 
 ```python
 from noise.page import Page
