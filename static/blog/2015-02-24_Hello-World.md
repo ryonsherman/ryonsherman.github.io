@@ -352,7 +352,7 @@ A browser directed to `file:///.../blog/build/index.html` displays "Hello World!
 <html>
   <head>
     <meta charset="utf-8">
-    <title>noise: a static website generator</title>
+    <title>Noise - a static webpage generator</title>
   </head>
   <body>
     Hello World!
