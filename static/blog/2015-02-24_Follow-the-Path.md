@@ -97,5 +97,5 @@ blog
 `-- template
 ```
 
-[Path]: https://github.com/ryonsherman/noise/blob/d27dbee9e46a2168100a9e5df4f7ce0a99fed83b/src/noise/path.py#L41
-[NoisePath]: https://github.com/ryonsherman/noise/blob/d27dbee9e46a2168100a9e5df4f7ce0a99fed83b/src/noise/path.py#L11
+[Path]: https://github.com/ryonsherman/noise/blob/c062b663ef97ca71d7bf7ef1d6be48b66d94c197/src/noise/path.py#L41
+[NoisePath]: https://github.com/ryonsherman/noise/blob/c062b663ef97ca71d7bf7ef1d6be48b66d94c197/src/noise/path.py#L11
