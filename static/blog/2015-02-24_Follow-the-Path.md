@@ -1,6 +1,6 @@
 ## Follow the Path
 
-Due to the extensive filesystem use of the application, a helper is created to aid in the handling of paths.
+Due to the extensive filesystem use of the application, a helper was created to aid in the handling of paths.
 
 #### Path Objects
 
@@ -60,7 +60,7 @@ class NoisePath(object):
 
 #### Path Helper
 
-A [Path] helper object encapsulates this `Path` object to represent the project root. Additional path objects are then instantiated to represent the `build`, `static`, and `template` directories:
+The [Path] helper object encapsulates a `Path` object to represent the project root. Additional path objects are then instantiated to represent the `build`, `static`, and `template` directories:
 
 ```python
 class Path(NoisePath):
@@ -86,7 +86,7 @@ class Path(NoisePath):
                 self.paths))))
 ```
 
-Calling this upon application initialization products the following directory tree:
+Calling this upon application initialization produces the following directory structure:
 
 ```
 $ ./noise.py init blog

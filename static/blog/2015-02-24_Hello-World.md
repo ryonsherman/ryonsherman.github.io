@@ -201,7 +201,7 @@ class Noise(object):
         self.path.init()
 ```
 
-Calling this upon application initialization produces the following directory tree:
+Calling this upon application initialization produces the following directory structure:
 
 ```
 $ ./noise.py init blog
