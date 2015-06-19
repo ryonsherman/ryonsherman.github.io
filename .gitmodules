@@ -1,0 +1,6 @@
+[submodule "hud"]
+	path = hud
+	url = git@github.com:ryonsherman/hud.git
+[submodule "blog"]
+	path = blog
+	url = git@github.com:ryonsherman/blog.git
