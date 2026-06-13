@@ -19,7 +19,7 @@
       <name>Ryon Sherman</name>
     </author>
     <content type="html"><p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
-<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img alt="12-unit jamming array on channel 1 in controlled lab environment" src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" /></a></p>
+<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" width="768" alt="12-unit jamming array on channel 1"></a></p>
 <h2>Architecture</h2>
 <p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
 <p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
@@ -241,6 +241,64 @@ def blog_index(page):
 <li>Built-in dev server with live reload via SSE</li>
 </ul>
 <p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p></content>
+  </entry>
+  
+  <entry>
+    <title>QRVid — Store Binary Data in QR Code Videos</title>
+    <link href="https://ryonsherman.github.io/blog/qrvid.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/qrvid.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Encode arbitrary binary data into QR code videos for YouTube storage, and decode it back from a downloaded video. Yes, it works.</p>
+<p><a href="https://github.com/ryonsherman/qrvid"><img src="https://github.com/ryonsherman/qrvid/raw/main/screenshots/preview.gif" width="768" alt="QR code video preview"></a></p>
+<p><a href="https://github.com/ryonsherman/qrvid">QRVid on GitHub</a></p>
+<h2>How it works</h2>
+<p>Input data is split into 300-byte chunks with a 20-byte header (magic, format version, flags, total chunks, chunk index, chunk length, total data length, CRC32). Each chunk is rendered as a QR code with error correction H (30%). QRs are laid out on a 1920×1080 H.264 video frame in a configurable grid — default 6×5 = 30 QRs per frame. Each layout is held for N frames (default 3 at 30 fps = 0.1s), then the next layout plays. YouTube's 33-second minimum duration is enforced with trailing black frames.</p>
+<h2>Reading from a video</h2>
+<p>The decoder scans every frame in parallel using a process pool. Each frame is checked against a black threshold (skipping padding frames), then QR codes are detected with pyzbar (falling back to OpenCV's built-in detector). Duplicate payloads are discarded by hash. Chunks are re-ordered by index, concatenated, and CRC32 is verified.</p>
+<p>It handles YouTube download natively — yt-dlp with Firefox cookies and bun JS runtime for YouTube's bot challenge.</p>
+<h2>Optional features</h2>
+<p><strong>Compression</strong> — gzip level 9 before encoding. <strong>Encryption</strong> — AES-256-GCM with PBKDF2 key derivation (600k iterations). <strong>Recovery</strong> — XOR parity chunks in configurable group sizes; if chunks are lost to YouTube re-encoding artifacts, missing data can be repaired. <strong>Integrity check</strong> — <code>--verify</code> decodes the output right after encoding to confirm everything survives.</p>
+<h2>Capacity</h2>
+<p>With defaults (6×5 = 30 QPF, 3 hold at 30 fps, 300 bytes/chunk):</p>
+<table>
+<thead>
+<tr>
+<th>Duration</th>
+<th>QRs</th>
+<th>Raw data</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4 min</td>
+<td>77,400</td>
+<td>~22 MB</td>
+</tr>
+<tr>
+<td>15 min</td>
+<td>324,000</td>
+<td>~82 MB</td>
+</tr>
+<tr>
+<td>12 hours</td>
+<td>15M+</td>
+<td>~3.9 GB</td>
+</tr>
+</tbody>
+</table>
+<p>Tune <code>--cols</code>, <code>--rows</code>, <code>--hold</code>, and <code>--box-size</code> to trade density for readability. The <code>--max-duration</code> flag splits across multiple files for YouTube's upload limits.</p>
+<h2>Usage</h2>
+<pre><code>qrvid enc myfile.bin -o myfile.mp4                          # basic
+qrvid enc myfile.bin -o myfile.mp4 --compress --password &quot;hunter2&quot;   # compress + encrypt
+qrvid enc myfile.bin -o myfile.mp4 --recovery 1             # loss protection
+qrvid dec myfile.mp4 -o restored.bin                        # decode local
+qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode from YouTube
+</code></pre>
+<p>Parallel frame generation (process pool) makes encoding practical — for a 1MB test file, a 6×5 layout encodes in seconds and all layouts pass verify.</p></content>
   </entry>
   
   <entry>
