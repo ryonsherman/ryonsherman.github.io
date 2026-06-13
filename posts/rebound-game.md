@@ -4,7 +4,7 @@ date: 2026-06-12
 
 I built a 4-player castle battle game with bouncing projectiles, power-ups, and online multiplayer.
 
-<img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="1024" height="768" alt="Rebound menu">
+<img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="768" alt="Rebound menu">
 
 ## The game
 

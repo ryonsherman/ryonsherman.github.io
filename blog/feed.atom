@@ -82,7 +82,7 @@ def blog_index(page):
       <name>Ryon Sherman</name>
     </author>
     <content type="html"><p>I built a 4-player castle battle game with bouncing projectiles, power-ups, and online multiplayer.</p>
-<p><img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="1024" height="768" alt="Rebound menu"></p>
+<p><img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="768" alt="Rebound menu"></p>
 <h2>The game</h2>
 <p>Rebound is a real-time arena game where four castles occupy the corners of the arena, each with a rotating cannon that fires ricocheting projectiles. The goal is to destroy every brick in your opponents' castles.</p>
 <p>The mechanics are simple to pick up:</p>
