@@ -102,4 +102,31 @@ def blog_index(page):
 <p>The source is on GitHub at <a href="https://github.com/ryonsherman/pygame-rebound/">ryonsherman/pygame-rebound</a>.</p></content>
   </entry>
   
+  <entry>
+    <title>Voxscript</title>
+    <link href="https://ryonsherman.github.io/blog/voxscript.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/voxscript.html</id>
+    <published>T00:00:00Z</published>
+    <updated>T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>title: Voxscript — A CLI Script-to-Speech Tool with Piper TTS
+date: 2026-06-12</p>
+<p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
+<p>Voxscript is a Python CLI that reads a text file of dialog lines and produces a WAV file using <a href="https://github.com/rhasspy/piper">Piper TTS</a> — a fast neural text-to-speech engine that runs entirely locally on a CPU.</p>
+<h2>How it works</h2>
+<p>You write a script in a simple <code>SPEAKER: dialog</code> format with blank lines for pacing. The tool parses each utterance, pipes them through Piper voice models, and concatenates everything into a single WAV with configurable silence between speakers.</p>
+<h2>Multi-voice support</h2>
+<p>You provide a JSON voice map to assign different Piper voices to different speakers. Any speaker not mapped falls back to a default voice.</p>
+<h2>Technical bits</h2>
+<ul>
+<li>Text is chunked at 500 characters (sentence-aware) before synthesis, keeping audio segments manageable for Piper</li>
+<li>Audio is concatenated as 16-bit PCM WAV, mono</li>
+<li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
+<li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
+</ul>
+<p>It has no GitHub repo — it was a weekend experiment in turning text into natural-sounding dialog without touching a microphone.</p></content>
+  </entry>
+  
 </feed>
