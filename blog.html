@@ -28,11 +28,11 @@
   
     <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
   
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
     <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
   
     <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
-  
-    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
   
   </ul>
 </div>
@@ -90,6 +90,48 @@
 <p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
 <p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
 <p>It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.</p>
+</div>
+
+<div class="blog-post">
+  <h3><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></h3>
+  <span class="post-date">2026-06-12</span>
+  <p>I built a battery-powered GPS tracker on an Arduino Nano that logs positions to internal EEPROM — no SD card, no breakout board, no cloud service. Just the chip and a GPS module.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>Power up, and the Nano wakes, powers the GPS module via a transistor switch, acquires a fix, logs the position, kills power to the GPS, opens a 5-second serial command window, then goes into watchdog-timer deep sleep. Repeat on the configured interval.</p>
+<p>The whole power cycle is controlled by a 2N2222 transistor on D4 — GPS ground is switched so it draws zero current when off. During deep sleep the Nano itself pulls ~5µA.</p>
+<h2 id="storage-in-eeprom">Storage in EEPROM</h2>
+<p>The ATmega328p has 1KB of EEPROM. With 10-byte records (4 bytes lat, 4 bytes lon, 2 bytes dwell counter), that's 67 positions in a ring buffer. Oldest records are overwritten when full.</p>
+<p>The dwell counter tracks how many consecutive log cycles the tracker stayed in the same spot, which is useful for inferring parked vs. moving time.</p>
+<p>Data is retrieved over serial with a <code>D</code> command that dumps CSV. Python scripts then convert to GPX/KML for mapping, or snap to roads using OSRM's free match API.</p>
+<h2 id="distance-threshold">Distance threshold</h2>
+<p>A movement check uses the haversine approximation — lat * 111320 m/°, lon * 111320 * cos(lat) m/° — and compares squared distance against a configurable threshold. If the tracker hasn't moved far enough, it increments the dwell counter instead of writing a new record. This saves storage for only meaningful location changes.</p>
+<h2 id="battery-life">Battery life</h2>
+<p>With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep between cycles:</p>
+<table>
+<thead>
+<tr>
+<th>Interval</th>
+<th>Runtime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10 min</td>
+<td>~23 days</td>
+</tr>
+<tr>
+<td>15 min</td>
+<td>~34 days</td>
+</tr>
+<tr>
+<td>30 min</td>
+<td>~2 months</td>
+</tr>
+</tbody>
+</table>
+<p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
+<h2 id="no-github-repo">No GitHub repo</h2>
+<p>This was a hardware hacking project to understand low-power GPS logging from scratch — no libraries for the GPS parsing (NMEA sentences are parsed character-by-character over SoftwareSerial), no RTC (time comes from the GPS fix), and no external storage.</p>
 </div>
 
 <div class="blog-post">

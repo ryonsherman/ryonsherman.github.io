@@ -68,6 +68,54 @@
   </entry>
   
   <entry>
+    <title>GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</title>
+    <link href="https://ryonsherman.github.io/blog/gps-tracker.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/gps-tracker.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built a battery-powered GPS tracker on an Arduino Nano that logs positions to internal EEPROM — no SD card, no breakout board, no cloud service. Just the chip and a GPS module.</p>
+<h2>How it works</h2>
+<p>Power up, and the Nano wakes, powers the GPS module via a transistor switch, acquires a fix, logs the position, kills power to the GPS, opens a 5-second serial command window, then goes into watchdog-timer deep sleep. Repeat on the configured interval.</p>
+<p>The whole power cycle is controlled by a 2N2222 transistor on D4 — GPS ground is switched so it draws zero current when off. During deep sleep the Nano itself pulls ~5µA.</p>
+<h2>Storage in EEPROM</h2>
+<p>The ATmega328p has 1KB of EEPROM. With 10-byte records (4 bytes lat, 4 bytes lon, 2 bytes dwell counter), that's 67 positions in a ring buffer. Oldest records are overwritten when full.</p>
+<p>The dwell counter tracks how many consecutive log cycles the tracker stayed in the same spot, which is useful for inferring parked vs. moving time.</p>
+<p>Data is retrieved over serial with a <code>D</code> command that dumps CSV. Python scripts then convert to GPX/KML for mapping, or snap to roads using OSRM's free match API.</p>
+<h2>Distance threshold</h2>
+<p>A movement check uses the haversine approximation — lat * 111320 m/°, lon * 111320 * cos(lat) m/° — and compares squared distance against a configurable threshold. If the tracker hasn't moved far enough, it increments the dwell counter instead of writing a new record. This saves storage for only meaningful location changes.</p>
+<h2>Battery life</h2>
+<p>With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep between cycles:</p>
+<table>
+<thead>
+<tr>
+<th>Interval</th>
+<th>Runtime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10 min</td>
+<td>~23 days</td>
+</tr>
+<tr>
+<td>15 min</td>
+<td>~34 days</td>
+</tr>
+<tr>
+<td>30 min</td>
+<td>~2 months</td>
+</tr>
+</tbody>
+</table>
+<p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
+<h2>No GitHub repo</h2>
+<p>This was a hardware hacking project to understand low-power GPS logging from scratch — no libraries for the GPS parsing (NMEA sentences are parsed character-by-character over SoftwareSerial), no RTC (time comes from the GPS fix), and no external storage.</p></content>
+  </entry>
+  
+  <entry>
     <title>Hello World — Noise, a Minimal Static Site Generator</title>
     <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/hello-world.html</id>
