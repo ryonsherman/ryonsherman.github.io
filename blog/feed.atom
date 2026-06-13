@@ -103,17 +103,15 @@ def blog_index(page):
   </entry>
   
   <entry>
-    <title>Voxscript</title>
+    <title>Voxscript — A CLI Script-to-Speech Tool with Piper TTS</title>
     <link href="https://ryonsherman.github.io/blog/voxscript.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/voxscript.html</id>
-    <published>T00:00:00Z</published>
-    <updated>T00:00:00Z</updated>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>title: Voxscript — A CLI Script-to-Speech Tool with Piper TTS
-date: 2026-06-12</p>
-<p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
+    <content type="html"><p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
 <p>Voxscript is a Python CLI that reads a text file of dialog lines and produces a WAV file using <a href="https://github.com/rhasspy/piper">Piper TTS</a> — a fast neural text-to-speech engine that runs entirely locally on a CPU.</p>
 <h2>How it works</h2>
 <p>You write a script in a simple <code>SPEAKER: dialog</code> format with blank lines for pacing. The tool parses each utterance, pipes them through Piper voice models, and concatenates everything into a single WAV with configurable silence between speakers.</p>

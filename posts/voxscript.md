@@ -1,5 +1,6 @@
 title: Voxscript — A CLI Script-to-Speech Tool with Piper TTS
 date: 2026-06-12
+---
 
 I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.
 
