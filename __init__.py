@@ -3,6 +3,8 @@ from noise import Noise
 
 app = Noise(__file__)
 
+import markdown
+
 from util import ascii_filter, load_posts
 app.template.env.filters['ascii'] = ascii_filter
 
@@ -26,6 +28,10 @@ def blog_index(page):
 
 @app.route('/blog/feed.atom')
 def blog_feed(page):
+    md = markdown.Markdown(extensions=['extra'])
+    for p in posts:
+        p['html'] = md.convert(p['body'])
+        md.reset()
     page.template = str(page.app.path.template('atom.xml'))
     page.data.update({
         'posts': posts,

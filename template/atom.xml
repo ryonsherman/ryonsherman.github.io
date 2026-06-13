@@ -5,6 +5,9 @@
   <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
   <id>https://ryonsherman.github.io/</id>
   <updated>{{ updated }}</updated>
+  <author>
+    <name>Ryon Sherman</name>
+  </author>
   {% for post in posts %}
   <entry>
     <title>{{ post.title }}</title>
@@ -12,7 +15,10 @@
     <id>https://ryonsherman.github.io/blog/{{ post.slug }}.html</id>
     <published>{{ post.date }}T00:00:00Z</published>
     <updated>{{ post.date }}T00:00:00Z</updated>
-    <content type="html"><![CDATA[{{ post.body }}]]></content>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html">{{ post.html }}</content>
   </entry>
   {% endfor %}
 </feed>

@@ -5,6 +5,9 @@
   <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
   <id>https://ryonsherman.github.io/</id>
   <updated>2026-06-12T00:00:00Z</updated>
+  <author>
+    <name>Ryon Sherman</name>
+  </author>
   
   <entry>
     <title>Hello World</title>
@@ -12,9 +15,11 @@
     <id>https://ryonsherman.github.io/blog/hello-world.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
-    <content type="html"><![CDATA[Welcome to my blog! This is the first post.
-
-Built with [Noise](https://github.com/ryonsherman/noise), a minimal static site generator.]]></content>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Welcome to my blog! This is the first post.</p>
+<p>Built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator.</p></content>
   </entry>
   
   <entry>
@@ -23,13 +28,15 @@ Built with [Noise](https://github.com/ryonsherman/noise), a minimal static site 
     <id>https://ryonsherman.github.io/blog/modernizing-noise.html</id>
     <published>2026-06-11T00:00:00Z</published>
     <updated>2026-06-11T00:00:00Z</updated>
-    <content type="html"><![CDATA[I recently updated my old static site generator, Noise, from Python 2 to Python 3.
-
-Key changes:
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I recently updated my old static site generator, Noise, from Python 2 to Python 3.</p>
+<p>Key changes:
 - Ported to Python 3.8+
-- Replaced insecure import with `importlib.util`
+- Replaced insecure import with <code>importlib.util</code>
 - Added proper test suite
-- Modern packaging with `pyproject.toml`]]></content>
+- Modern packaging with <code>pyproject.toml</code></p></content>
   </entry>
   
 </feed>
