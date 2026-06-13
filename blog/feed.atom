@@ -37,13 +37,13 @@
 <li>Rewriting every subsequent canary's hash reference</li>
 <li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
 </ul>
-<p>The public dashboard at <code>ryonsherman.github.io/canary/</code> verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
 <h2>Why?</h2>
 <p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p></content>
   </entry>
   
   <entry>
-    <title>Hello World</title>
+    <title>Hello World — Noise, a Minimal Static Site Generator</title>
     <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/hello-world.html</id>
     <published>2026-06-12T00:00:00Z</published>
@@ -51,25 +51,25 @@
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>Welcome to my blog! This is the first post.</p>
-<p>Built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator.</p></content>
-  </entry>
-  
-  <entry>
-    <title>Modernizing Noise</title>
-    <link href="https://ryonsherman.github.io/blog/modernizing-noise.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/modernizing-noise.html</id>
-    <published>2026-06-11T00:00:00Z</published>
-    <updated>2026-06-11T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>I recently updated my old static site generator, Noise, from Python 2 to Python 3.</p>
-<p>Key changes:
-- Ported to Python 3.8+
-- Replaced insecure import with <code>importlib.util</code>
-- Added proper test suite
-- Modern packaging with <code>pyproject.toml</code></p></content>
+    <content type="html"><p>This site is built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator I wrote in Python.</p>
+<p>It takes Markdown content and Jinja2 templates and produces flat HTML files. Routes are declared with a decorator, much like Flask:</p>
+<pre><code class="language-python">@app.route('/blog')
+def blog_index(page):
+    page.data.update({
+        'title': &quot;Blog&quot;,
+        'posts': posts,
+    })
+</code></pre>
+<p>Noise handles the rest — finding the template, rendering the page, and writing the output file.</p>
+<p>I recently modernized it from the original Python 2 to 3.8+. Key changes:</p>
+<ul>
+<li>Replaced insecure <code>__import__()</code> with <code>importlib.util</code></li>
+<li>Fixed global Markdown state that leaked between renders</li>
+<li>Added a proper test suite (33 tests)</li>
+<li>Modern packaging with <code>pyproject.toml</code></li>
+<li>Built-in dev server with live reload via SSE</li>
+</ul>
+<p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p></content>
   </entry>
   
 </feed>

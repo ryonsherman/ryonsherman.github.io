@@ -24,9 +24,9 @@
 <div class="blog content">
   <ul>
   
-    <li><a href="/blog/hello-world.html">Hello World</a></li>
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
   
-    <li><a href="/blog/modernizing-noise.html">Modernizing Noise</a></li>
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
   
   </ul>
 </div>
@@ -41,21 +41,54 @@
 
 
 <div class="blog-post">
-  <h3><a href="/blog/hello-world.html">Hello World</a></h3>
+  <h3><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>Welcome to my blog! This is the first post.</p>
-<p>Built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator.</p>
+  <p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
+<ul>
+<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
+<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
+<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
+<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
+</ul>
+<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
+<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
+<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
+<h2 id="chain-integrity">Chain integrity</h2>
+<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
+<ul>
+<li>Forging a valid ECDSA signature without access to the private key</li>
+<li>Rewriting every subsequent canary's hash reference</li>
+<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
+</ul>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
+<h2 id="why">Why?</h2>
+<p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p>
 </div>
 
 <div class="blog-post">
-  <h3><a href="/blog/modernizing-noise.html">Modernizing Noise</a></h3>
-  <span class="post-date">2026-06-11</span>
-  <p>I recently updated my old static site generator, Noise, from Python 2 to Python 3.</p>
-<p>Key changes:
-- Ported to Python 3.8+
-- Replaced insecure import with <code>importlib.util</code>
-- Added proper test suite
-- Modern packaging with <code>pyproject.toml</code></p>
+  <h3><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></h3>
+  <span class="post-date">2026-06-12</span>
+  <p>This site is built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator I wrote in Python.</p>
+<p>It takes Markdown content and Jinja2 templates and produces flat HTML files. Routes are declared with a decorator, much like Flask:</p>
+<pre><code class="language-python">@app.route('/blog')
+def blog_index(page):
+    page.data.update({
+        'title': &quot;Blog&quot;,
+        'posts': posts,
+    })
+</code></pre>
+<p>Noise handles the rest — finding the template, rendering the page, and writing the output file.</p>
+<p>I recently modernized it from the original Python 2 to 3.8+. Key changes:</p>
+<ul>
+<li>Replaced insecure <code>__import__()</code> with <code>importlib.util</code></li>
+<li>Fixed global Markdown state that leaked between renders</li>
+<li>Added a proper test suite (33 tests)</li>
+<li>Modern packaging with <code>pyproject.toml</code></li>
+<li>Built-in dev server with live reload via SSE</li>
+</ul>
+<p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p>
 </div>
 </div>
     </div>
@@ -73,7 +106,7 @@
 </ul>
 <ul class="feeds">
   Feed:
-  <li><a href="/blog/feed.atom">Feed</a></li>
+  <li><a href="/blog/feed.atom">blog</a></li>
 </ul>
 <ul class="archive">
   Source:

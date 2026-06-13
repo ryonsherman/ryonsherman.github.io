@@ -27,7 +27,7 @@ Each canary chains to the previous one via SHA-256. Breaking the chain would req
 - Rewriting every subsequent canary's hash reference
 - Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain
 
-The public dashboard at `ryonsherman.github.io/canary/` verifies chain integrity client-side using the Web Crypto API — no server needed.
+The source is on GitHub at [ryonsherman/canary](https://github.com/ryonsherman/canary/), with a public dashboard at `ryonsherman.github.io/canary/` that verifies chain integrity client-side using the Web Crypto API — no server needed.
 
 ## Why?
 

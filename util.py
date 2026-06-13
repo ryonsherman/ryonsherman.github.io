@@ -16,6 +16,11 @@ def slugify(name):
     return name
 
 
+def title_from_filename(filepath):
+    name = os.path.splitext(os.path.basename(filepath))[0]
+    return name.replace('-', ' ').title()
+
+
 def parse_post(filepath):
     with open(filepath) as f:
         content = f.read()
@@ -33,10 +38,10 @@ def parse_post(filepath):
             meta[key.strip()] = val.strip()
 
     return {
-        'title': meta.get('title', os.path.basename(filepath)),
+        'title': meta.get('title', title_from_filename(filepath)),
         'date': meta.get('date', ''),
         'body': body.strip(),
-        'slug': slugify(os.path.basename(filepath)),
+        'slug': slugify(meta.get('slug', os.path.basename(filepath))),
     }
 
 
