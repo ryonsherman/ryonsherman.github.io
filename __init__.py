@@ -20,10 +20,11 @@ def index(page):
 
 @app.route('/blog')
 def blog_index(page):
+    page.template = str(page.app.path.template('blog.html'))
     page.data.update({
         'title': "Blog - secretco.de.com",
-        'posts': posts,
         'recent_posts': posts[:25],
+        **pagination(1),
     })
 
 @app.route('/blog/feed.atom')
@@ -37,6 +38,32 @@ def blog_feed(page):
         'posts': posts,
         'updated': posts[0]['date'] + 'T00:00:00Z' if posts else '',
     })
+
+PER_PAGE = 10
+total_pages = max(1, (len(posts) + PER_PAGE - 1) // PER_PAGE)
+
+def pagination(page_num):
+    start = (page_num - 1) * PER_PAGE
+    end = start + PER_PAGE
+    return {
+        'posts': posts[start:end],
+        'page': page_num,
+        'total_pages': total_pages,
+        'prev_page': page_num - 1 if page_num > 1 else None,
+        'next_page': page_num + 1 if page_num < total_pages else None,
+    }
+
+for page_num in range(2, total_pages + 1):
+    def make_paginated_handler(n):
+        def handler(page):
+            page.template = str(page.app.path.template('blog.html'))
+            page.data.update({
+                'title': f'Blog (Page {n}) - secretco.de.com',
+                'recent_posts': posts[:25],
+                **pagination(n),
+            })
+        return handler
+    app.routes[f'/blog/index/{page_num}.html'] = make_paginated_handler(page_num)
 
 for post in posts:
     def make_handler(p):

@@ -9,4 +9,16 @@
   {{ post.body|markdown }}
 </div>
 {% endfor %}
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if prev_page %}
+  <a href="/blog/index/{{ prev_page }}.html" class="prev">&laquo; Newer</a>
+  {% endif %}
+  <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+  {% if next_page %}
+  <a href="/blog/index/{{ next_page }}.html" class="next">Older &raquo;</a>
+  {% endif %}
+</div>
+{% endif %}
 {%- endblock %}
