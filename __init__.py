@@ -39,6 +39,8 @@ def blog_feed(page):
         'updated': posts[0]['date'] + 'T00:00:00Z' if posts else '',
     })
 
+app.routes['/blog/index/1.html'] = blog_index
+
 PER_PAGE = 10
 total_pages = max(1, (len(posts) + PER_PAGE - 1) // PER_PAGE)
 
