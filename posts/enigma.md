@@ -29,4 +29,10 @@ Each candidate decryption is scored using a combination of index of coincidence 
 
 There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.
 
-It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.
+## What I Learned
+
+- **Building is the best way to understand** — I could have read Wikipedia articles about the Enigma for hours and not understood it as deeply as one weekend of writing code. The signal path through plugboard → rotors → reflector → rotors → plugboard only clicks when you implement it yourself.
+- **Reflector symmetry is beautiful** — The reflector makes encryption and decryption the same operation. Feed ciphertext back through the same settings and you get plaintext. This is historically accurate and mathematically elegant.
+- **Index of coincidence is a superpower** — Scoring candidate decryptions by how well they match expected letter frequencies lets you find correct keys among millions of possibilities without reading any of them. It's the same technique that broke the real Enigma.
+- **Multiprocessing is free speed** — A million rotor combinations × starting positions is trivially parallel. The cracker scales to all available cores with almost no effort.
+- **Historical rotors had quirks** — Late-war rotors VI, VII, and VIII had two turnover points instead of one. Little details like this make simulation fun — you're not just implementing an algorithm, you're recreating a real piece of engineering history.

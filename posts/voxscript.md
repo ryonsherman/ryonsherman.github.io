@@ -22,4 +22,10 @@ You provide a JSON voice map to assign different Piper voices to different speak
 - Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing
 - Rate control via `--length-scale` (1.0 is normal, lower = faster, higher = slower)
 
-It has no GitHub repo — it was a weekend experiment in turning text into natural-sounding dialog without touching a microphone.
+## What I Learned
+
+- **Piper TTS is surprisingly good for local CPU** — It runs real-time neural TTS on a laptop CPU with no GPU. Voice quality is decent across multiple models, and switching voices between lines is seamless.
+- **Sentence-aware chunking matters** — Piper has a maximum input length. Naively splitting at the character boundary produces broken audio mid-word. Chunking at sentence boundaries (500 chars) keeps segments natural.
+- **Audio concatenation is trivial** — Once you have individual WAV segments as 16-bit PCM byte arrays, joining them with silence padding is just array concatenation. Audio programming doesn't have to be complicated.
+- **Voice mapping makes scripts flexible** — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.
+- **CLI-first design works** — A simple `SPEAKER: dialog` format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.

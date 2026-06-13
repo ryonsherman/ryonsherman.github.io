@@ -76,7 +76,14 @@
 <p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
 <p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
 <p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
-<p>It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.</p></div>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Building is the best way to understand</strong> — I could have read Wikipedia articles about the Enigma for hours and not understood it as deeply as one weekend of writing code. The signal path through plugboard → rotors → reflector → rotors → plugboard only clicks when you implement it yourself.</li>
+<li><strong>Reflector symmetry is beautiful</strong> — The reflector makes encryption and decryption the same operation. Feed ciphertext back through the same settings and you get plaintext. This is historically accurate and mathematically elegant.</li>
+<li><strong>Index of coincidence is a superpower</strong> — Scoring candidate decryptions by how well they match expected letter frequencies lets you find correct keys among millions of possibilities without reading any of them. It's the same technique that broke the real Enigma.</li>
+<li><strong>Multiprocessing is free speed</strong> — A million rotor combinations × starting positions is trivially parallel. The cracker scales to all available cores with almost no effort.</li>
+<li><strong>Historical rotors had quirks</strong> — Late-war rotors VI, VII, and VIII had two turnover points instead of one. Little details like this make simulation fun — you're not just implementing an algorithm, you're recreating a real piece of engineering history.</li>
+</ul></div>
     </div>
     <!-- End Content -->
 

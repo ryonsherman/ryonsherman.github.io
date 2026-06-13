@@ -81,7 +81,14 @@ def blog_index(page):
 <li>Modern packaging with <code>pyproject.toml</code></li>
 <li>Built-in dev server with live reload via SSE</li>
 </ul>
-<p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p></div>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Rewriting is sometimes necessary</strong> — The Python 2 → 3 migration was painful but forced me to understand every line of the codebase. The result is cleaner, safer, and properly tested.</li>
+<li><strong><code>__import__()</code> is a security hole</strong> — Using string-based module loading for plugin systems is convenient but dangerous. <code>importlib.util.spec_from_file_location()</code> is the safe alternative that I should have used from the start.</li>
+<li><strong>Static site generators are deceptively simple</strong> — The core loop is trivial: routes → templates → files. But the ecosystem (live reload, build optimization, error handling, template inheritance) is where the complexity hides.</li>
+<li><strong>Submodule workflows are fiddly</strong> — Having the blog output in a git submodule means every deploy is a two-step process: update the submodule, then update the parent. It's worth it for clean separation, but it adds friction.</li>
+<li><strong>Test suites pay for themselves instantly</strong> — The 33 tests caught regressions during the Python 3 migration that would have taken hours to find manually.</li>
+</ul></div>
     </div>
     <!-- End Content -->
 

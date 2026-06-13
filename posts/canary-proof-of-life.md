@@ -30,6 +30,10 @@ Each canary chains to the previous one via SHA-256. Breaking the chain would req
 
 The source is on GitHub at [ryonsherman/canary](https://github.com/ryonsherman/canary/), with a public dashboard at `ryonsherman.github.io/canary/` that verifies chain integrity client-side using the Web Crypto API — no server needed.
 
-## Why?
+## What I Learned
 
-Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.
+- **Hash chaining is elegant** — Each canary links to the previous one via SHA-256, creating a tamper-evident chain. Breaking it requires either forging an ECDSA signature or rewriting every subsequent block — the same principle that makes blockchains work.
+- **OpenTimestamps is magical** — Anchoring a hash to the Bitcoin blockchain costs essentially nothing and provides a permanent, publicly verifiable timestamp that anyone can check without trusting a third party.
+- **Android Keystore hardware backing** — The ECDSA signing key never leaves the device's secure enclave. Even if the app is compromised, the key can't be extracted. This is the right way to handle secrets on mobile.
+- **NFC for key transport** — Storing the recovery seed on an NTAG tag means the key is physically bound to a token. No cloud backup, no server compromise, no sync issues. You have the tag or you don't.
+- **GitHub Actions as build/deploy pipeline** — Using CI to clearsign, timestamp, and tag each canary turned GitHub into a free public notary with built-in verification.

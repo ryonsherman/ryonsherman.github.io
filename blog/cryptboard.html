@@ -80,7 +80,14 @@ cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
 cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
 cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
 </code></pre>
-<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p></div>
+<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Plausible deniability via brute force</strong> — Making the receiver try every message instead of tagging them with metadata means there's no way to know which blob belongs to whom, even with full repo access. This is deniability by design, not by omission.</li>
+<li><strong>The header trick</strong> — Encrypting a fixed plaintext as a fast-match header turns O(n) full decrypts into O(n) cheap header attempts + O(1) body decrypts. It's a tiny idea that makes the whole system practical at scale.</li>
+<li><strong>GitHub Actions as a trusted gatekeeper</strong> — The CI workflow validates format, enforces append-only, and auto-merges. This means the repo is self-policing with no human moderator needed.</li>
+<li><strong>No metadata is a feature</strong> — No timestamps, no sender identity, no message size hints. The UUID filenames are random. Even GitHub's servers can't correlate messages to senders since all traffic goes through PRs from forks. Every datum you don't store is a datum you can't leak.</li>
+</ul></div>
     </div>
     <!-- End Content -->
 

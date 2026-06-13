@@ -45,4 +45,10 @@ qrvid dec myfile.mp4 -o restored.bin                        # decode local
 qrvid dec "https://youtu.be/..." -o restored.bin            # decode from YouTube
 ```
 
-Parallel frame generation (process pool) makes encoding practical — for a 1MB test file, a 6×5 layout encodes in seconds and all layouts pass verify.
+## What I Learned
+
+- **Multi-layer error correction is essential** — QR codes have built-in ECC (I used H, the highest). But YouTube's re-encoding adds artifacts that can render QRs unreadable. XOR recovery chunks add another layer — and they actually work.
+- **Parallel frame generation is a game changer** — Layout rendering is embarrassingly parallel. A process pool turns hours of encoding into minutes. The progress bar with ETA made debugging tolerable.
+- **YouTube has weird constraints** — 33-second minimum video length, unverified accounts limited to 15 minutes, re-encoding that breaks data. Designing around platform quirks is half the work.
+- **Checkpoint resuming matters** — Scanning a 12-hour video from scratch is painful. Saving decoded chunks by frame index means you can resume an interrupted decode in seconds instead of hours.
+- **QR version auto-selection is neat** — I didn't have to pick a QR size. The library chooses the smallest version that fits the data, and each chunk gets its own optimal version. Simple, correct, done.

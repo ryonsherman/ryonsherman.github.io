@@ -42,3 +42,10 @@ A 3-position ON-OFF-ON switch on the master provides instant physical control: p
 ## Legal
 
 > ⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.
+
+## What I Learned
+
+- **I2C vs SPI for control** — When your RF modules use SPI (2.4 GHz), putting the command bus on I2C eliminates frequency contention. The two protocols coexist on the same wires without interference.
+- **Fan-out algorithms matter** — Naively blasting all nodes at the same center frequency wastes power in overlapping coverage. Spreading across the channel bandwidth gives you full spectral coverage with the same total power.
+- **Hardware kill switches** — A three-position toggle switch is the most reliable "off" mechanism. No software crashes, no firmware bugs, no serial connection required. Just throw the switch.
+- **Adaptive sensing** — Using one NRF24 in RX mode as a spectrum analyzer while the rest transmit is a neat trick. The master sees what's happening on every channel and can target the busiest ones without any external hardware.

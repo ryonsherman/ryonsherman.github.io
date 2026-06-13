@@ -110,7 +110,14 @@
 <h2>Legal</h2>
 <blockquote>
 <p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
-</blockquote></content>
+</blockquote>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>I2C vs SPI for control</strong> — When your RF modules use SPI (2.4 GHz), putting the command bus on I2C eliminates frequency contention. The two protocols coexist on the same wires without interference.</li>
+<li><strong>Fan-out algorithms matter</strong> — Naively blasting all nodes at the same center frequency wastes power in overlapping coverage. Spreading across the channel bandwidth gives you full spectral coverage with the same total power.</li>
+<li><strong>Hardware kill switches</strong> — A three-position toggle switch is the most reliable "off" mechanism. No software crashes, no firmware bugs, no serial connection required. Just throw the switch.</li>
+<li><strong>Adaptive sensing</strong> — Using one NRF24 in RX mode as a spectrum analyzer while the rest transmit is a neat trick. The master sees what's happening on every channel and can target the busiest ones without any external hardware.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -154,7 +161,14 @@ dev.systems.append(sys)
 <h2>Abandoned, But Complete</h2>
 <p>Unlike the uTorrent Bridge which was mostly stubs, the BC246T library is genuinely useful. The protocol implementation is thorough, the API is clean, and the documentation is excellent. I used it to program my scanner more than once.</p>
 <p>The AVR autoprogrammer never got past initialization and filesystem mounting — the FAT16 driver was written but the actual scanner programming logic was never implemented. Still, getting raw SPI talking to an SD card on a bare-metal AVR is a rite of passage, and this code captures that moment.</p>
-<p>It's Python 2, it uses <code>map</code> and <code>lambda</code> freely, and the tuple-unpacking syntax (<code>def opening_message(self, (l1_char, l2_char))</code>) is a fossil from an older Python. But it works. And 10+ years later, it's still a solid example of what you can do when you just read the datasheet and start writing code.</p></content>
+<p>It's Python 2, it uses <code>map</code> and <code>lambda</code> freely, and the tuple-unpacking syntax (<code>def opening_message(self, (l1_char, l2_char))</code>) is a fossil from an older Python. But it works. And 10+ years later, it's still a solid example of what you can do when you just read the datasheet and start writing code.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Documentation as code</strong> — Embedding the full protocol spec in the source comments meant the documentation and the implementation never drifted apart. It made maintenance trivial and debugging self-contained.</li>
+<li><strong>CVT (computer-verified testing)</strong> — Having a real device to test against made the difference between a library that works and one that almost works. Every command I implemented I could test immediately by watching the scanner's display respond.</li>
+<li><strong>Bare-metal AVR is a different world</strong> — Writing SPI and SD card drivers from scratch on an 8-bit microcontroller teaches you things about hardware timing and bit-banging that no high-level framework ever will.</li>
+<li><strong>Sometimes Python 2 was fine</strong> — The code still works a decade later. The right tool is the one that gets the job done, not necessarily the newest one.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -186,8 +200,14 @@ dev.systems.append(sys)
 <li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
 </ul>
 <p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
-<h2>Why?</h2>
-<p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Hash chaining is elegant</strong> — Each canary links to the previous one via SHA-256, creating a tamper-evident chain. Breaking it requires either forging an ECDSA signature or rewriting every subsequent block — the same principle that makes blockchains work.</li>
+<li><strong>OpenTimestamps is magical</strong> — Anchoring a hash to the Bitcoin blockchain costs essentially nothing and provides a permanent, publicly verifiable timestamp that anyone can check without trusting a third party.</li>
+<li><strong>Android Keystore hardware backing</strong> — The ECDSA signing key never leaves the device's secure enclave. Even if the app is compromised, the key can't be extracted. This is the right way to handle secrets on mobile.</li>
+<li><strong>NFC for key transport</strong> — Storing the recovery seed on an NTAG tag means the key is physically bound to a token. No cloud backup, no server compromise, no sync issues. You have the tag or you don't.</li>
+<li><strong>GitHub Actions as build/deploy pipeline</strong> — Using CI to clearsign, timestamp, and tag each canary turned GitHub into a free public notary with built-in verification.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -216,7 +236,14 @@ cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
 cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
 cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
 </code></pre>
-<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p></content>
+<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Plausible deniability via brute force</strong> — Making the receiver try every message instead of tagging them with metadata means there's no way to know which blob belongs to whom, even with full repo access. This is deniability by design, not by omission.</li>
+<li><strong>The header trick</strong> — Encrypting a fixed plaintext as a fast-match header turns O(n) full decrypts into O(n) cheap header attempts + O(1) body decrypts. It's a tiny idea that makes the whole system practical at scale.</li>
+<li><strong>GitHub Actions as a trusted gatekeeper</strong> — The CI workflow validates format, enforces append-only, and auto-merges. This means the repo is self-policing with no human moderator needed.</li>
+<li><strong>No metadata is a feature</strong> — No timestamps, no sender identity, no message size hints. The UUID filenames are random. Even GitHub's servers can't correlate messages to senders since all traffic goes through PRs from forks. Every datum you don't store is a datum you can't leak.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -241,7 +268,14 @@ cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
 <p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
 <p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
 <p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
-<p>It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Building is the best way to understand</strong> — I could have read Wikipedia articles about the Enigma for hours and not understood it as deeply as one weekend of writing code. The signal path through plugboard → rotors → reflector → rotors → plugboard only clicks when you implement it yourself.</li>
+<li><strong>Reflector symmetry is beautiful</strong> — The reflector makes encryption and decryption the same operation. Feed ciphertext back through the same settings and you get plaintext. This is historically accurate and mathematically elegant.</li>
+<li><strong>Index of coincidence is a superpower</strong> — Scoring candidate decryptions by how well they match expected letter frequencies lets you find correct keys among millions of possibilities without reading any of them. It's the same technique that broke the real Enigma.</li>
+<li><strong>Multiprocessing is free speed</strong> — A million rotor combinations × starting positions is trivially parallel. The cracker scales to all available cores with almost no effort.</li>
+<li><strong>Historical rotors had quirks</strong> — Late-war rotors VI, VII, and VIII had two turnover points instead of one. Little details like this make simulation fun — you're not just implementing an algorithm, you're recreating a real piece of engineering history.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -330,8 +364,14 @@ cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
 </tbody>
 </table>
 <p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
-<h2>No GitHub repo</h2>
-<p>This was a hardware hacking project to understand low-power GPS logging from scratch — no libraries for the GPS parsing (NMEA sentences are parsed character-by-character over SoftwareSerial), no RTC (time comes from the GPS fix), and no external storage.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Low-power design = control every microamp</strong> — The GPS module draws significant current, so switching its ground with a transistor makes it draw zero when off. During deep sleep the Nano pulls ~5 µA. Every component choice affects battery life.</li>
+<li><strong>EEPROM is tiny but reliable</strong> — 1 KB holds 67 GPS fix records with no filesystem overhead, no corruption risk from power loss, and no SD card that can shake loose. Sometimes the simplest storage is the best.</li>
+<li><strong>Haversine distance checks save storage</strong> — Checking whether the tracker actually moved before writing avoids filling the log with "still here" entries. It's a simple optimization that doubles useful recording time.</li>
+<li><strong>Watchdog timer deep sleep</strong> — The ATmega328p's watchdog timer wakes from deep sleep at configurable intervals without an external RTC. The GPS itself provides the time — no extra chip needed.</li>
+<li><strong>NMEA parsing from scratch</strong> — GPS sentences like <code>$GPGGA</code> are just comma-separated text. Parsing them character-by-character over SoftwareSerial teaches you exactly what information a GPS fix contains and why.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -362,8 +402,14 @@ cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
 <p>Raw SRAM power-up data has a per-cell zeros rate of 45–55% and min-entropy of ~2–4 bits per byte — definitely needs conditioning before cryptographic use.</p>
 <h2>Performance</h2>
 <p>With 3 chips and XOR-fold: ~5.9 KB/s. With 8 chips and SHA-256: ~900 B/s conditioned. Throughput is limited more by I2C read speed than by SRAM settle time.</p>
-<h2>What it's good for</h2>
-<p>This isn't practical. A dedicated hardware RNG chip costs $5 and outperforms it by orders of magnitude. But it's a fascinating way to understand entropy sources, SRAM physics, and what "true random" actually means at the physical level. And there's something satisfying about watching real random bytes stream across a serial terminal, generated by quantum-scale manufacturing variations in $2 chips.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Entropy is everywhere if you know where to look</strong> — Every SRAM cell has a random power-up state determined by atomic-scale manufacturing variations. This is the same physics used in PUFs for cryptographic key generation, chip fingerprinting, and anti-counterfeiting.</li>
+<li><strong>Debiasing is essential</strong> — Raw SRAM data has 45-55% zeros rate with 2-4 bits of min-entropy per byte. Using XOR-fold preserves throughput while removing bias, and SHA-256 conditioning brings it to full cryptographic quality.</li>
+<li><strong>Timing jitter adds entropy</strong> — Simply adding <code>micros()</code> jitter between power-off and power-on introduces entropy from unpredictable interrupt timing — a free bonus source.</li>
+<li><strong>Health checks prevent silent failure</strong> — The repetition count test catches stuck bits, dead chips, and wiring faults before the bad data reaches the output. In cryptographic hardware, failing loudly is better than producing subtly biased output.</li>
+<li><strong>The circuit is dead simple</strong> — An N-channel MOSFET, two pull-up resistors, and a handful of decoupling caps is all it takes to turn $2 I2C SRAM chips into a true random number generator. The hardware is trivial; the understanding of what's happening at the physical level is not.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -393,7 +439,14 @@ def blog_index(page):
 <li>Modern packaging with <code>pyproject.toml</code></li>
 <li>Built-in dev server with live reload via SSE</li>
 </ul>
-<p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Rewriting is sometimes necessary</strong> — The Python 2 → 3 migration was painful but forced me to understand every line of the codebase. The result is cleaner, safer, and properly tested.</li>
+<li><strong><code>__import__()</code> is a security hole</strong> — Using string-based module loading for plugin systems is convenient but dangerous. <code>importlib.util.spec_from_file_location()</code> is the safe alternative that I should have used from the start.</li>
+<li><strong>Static site generators are deceptively simple</strong> — The core loop is trivial: routes → templates → files. But the ecosystem (live reload, build optimization, error handling, template inheritance) is where the complexity hides.</li>
+<li><strong>Submodule workflows are fiddly</strong> — Having the blog output in a git submodule means every deploy is a two-step process: update the submodule, then update the parent. It's worth it for clean separation, but it adds friction.</li>
+<li><strong>Test suites pay for themselves instantly</strong> — The 33 tests caught regressions during the Python 3 migration that would have taken hours to find manually.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -451,7 +504,14 @@ qrvid enc myfile.bin -o myfile.mp4 --recovery 1             # loss protection
 qrvid dec myfile.mp4 -o restored.bin                        # decode local
 qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode from YouTube
 </code></pre>
-<p>Parallel frame generation (process pool) makes encoding practical — for a 1MB test file, a 6×5 layout encodes in seconds and all layouts pass verify.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Multi-layer error correction is essential</strong> — QR codes have built-in ECC (I used H, the highest). But YouTube's re-encoding adds artifacts that can render QRs unreadable. XOR recovery chunks add another layer — and they actually work.</li>
+<li><strong>Parallel frame generation is a game changer</strong> — Layout rendering is embarrassingly parallel. A process pool turns hours of encoding into minutes. The progress bar with ETA made debugging tolerable.</li>
+<li><strong>YouTube has weird constraints</strong> — 33-second minimum video length, unverified accounts limited to 15 minutes, re-encoding that breaks data. Designing around platform quirks is half the work.</li>
+<li><strong>Checkpoint resuming matters</strong> — Scanning a 12-hour video from scratch is painful. Saving decoded chunks by frame index means you can resume an interrupted decode in seconds instead of hours.</li>
+<li><strong>QR version auto-selection is neat</strong> — I didn't have to pick a QR size. The library chooses the smallest version that fits the data, and each chunk gets its own optimal version. Simple, correct, done.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -481,7 +541,14 @@ qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode f
 <p>Multiplayer uses a server-authoritative architecture: the server runs the physics, clients send only raw inputs. NATS handles message routing with automatic matchmaking.</p>
 <h2>Power-ups</h2>
 <p>There are 12 power-ups in three categories — offensive abilities like piercing and spread shot, defensive abilities like shield pulse and healing shield, and instant pickups like repair kits and cannon boost. Each change adds a layer of tactical depth to the chaos of bouncing projectiles.</p>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/pygame-rebound/">ryonsherman/pygame-rebound</a>.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Richochet physics is simple arithmetic</strong> — Projectile bouncing off walls is just negating the velocity component. Bouncing off other projectiles requires some vector math. But the core physics fits in about 50 lines of Python.</li>
+<li><strong>Server-authoritative multiplayer is the right call</strong> — Clients send raw inputs, the server runs the physics. This prevents aimbots, wallhacks, and speed hacks without any client-side trust. NATS handles the routing cleanly.</li>
+<li><strong>AI via ray casting</strong> — The AI fires virtual rays off walls to find valid bounce paths to targets. It's simple, deterministic, and produces surprisingly human-looking play. Three difficulty levels tune fire rate and accuracy.</li>
+<li><strong>Power-ups add depth without complexity</strong> — Each power-up is just a timed modifier to an existing game stat. Spread shot sets projectile count to 3. Speed boost multiplies velocity. The core systems don't change; the modifiers just stack.</li>
+<li><strong>Pygame is enough</strong> — No Unity, no Unreal, no Godot. Pygame with software rendering runs a 4-player game with physics, particles, and AI at 60 FPS. Sometimes the simple tools are all you need.</li>
+</ul></content>
   </entry>
   
   <entry>
@@ -557,7 +624,14 @@ auth = basic
 <li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
 <li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
 </ul>
-<p>It has no GitHub repo — it was a weekend experiment in turning text into natural-sounding dialog without touching a microphone.</p></content>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Piper TTS is surprisingly good for local CPU</strong> — It runs real-time neural TTS on a laptop CPU with no GPU. Voice quality is decent across multiple models, and switching voices between lines is seamless.</li>
+<li><strong>Sentence-aware chunking matters</strong> — Piper has a maximum input length. Naively splitting at the character boundary produces broken audio mid-word. Chunking at sentence boundaries (500 chars) keeps segments natural.</li>
+<li><strong>Audio concatenation is trivial</strong> — Once you have individual WAV segments as 16-bit PCM byte arrays, joining them with silence padding is just array concatenation. Audio programming doesn't have to be complicated.</li>
+<li><strong>Voice mapping makes scripts flexible</strong> — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.</li>
+<li><strong>CLI-first design works</strong> — A simple <code>SPEAKER: dialog</code> format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.</li>
+</ul></content>
   </entry>
   
 </feed>

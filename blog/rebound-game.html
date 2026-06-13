@@ -81,7 +81,14 @@
 <p>Multiplayer uses a server-authoritative architecture: the server runs the physics, clients send only raw inputs. NATS handles message routing with automatic matchmaking.</p>
 <h2 id="power-ups">Power-ups</h2>
 <p>There are 12 power-ups in three categories — offensive abilities like piercing and spread shot, defensive abilities like shield pulse and healing shield, and instant pickups like repair kits and cannon boost. Each change adds a layer of tactical depth to the chaos of bouncing projectiles.</p>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/pygame-rebound/">ryonsherman/pygame-rebound</a>.</p></div>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Richochet physics is simple arithmetic</strong> — Projectile bouncing off walls is just negating the velocity component. Bouncing off other projectiles requires some vector math. But the core physics fits in about 50 lines of Python.</li>
+<li><strong>Server-authoritative multiplayer is the right call</strong> — Clients send raw inputs, the server runs the physics. This prevents aimbots, wallhacks, and speed hacks without any client-side trust. NATS handles the routing cleanly.</li>
+<li><strong>AI via ray casting</strong> — The AI fires virtual rays off walls to find valid bounce paths to targets. It's simple, deterministic, and produces surprisingly human-looking play. Three difficulty levels tune fire rate and accuracy.</li>
+<li><strong>Power-ups add depth without complexity</strong> — Each power-up is just a timed modifier to an existing game stat. Spread shot sets projectile count to 3. Speed boost multiplies velocity. The core systems don't change; the modifiers just stack.</li>
+<li><strong>Pygame is enough</strong> — No Unity, no Unreal, no Godot. Pygame with software rendering runs a 4-player game with physics, particles, and AI at 60 FPS. Sometimes the simple tools are all you need.</li>
+</ul></div>
     </div>
     <!-- End Content -->
 

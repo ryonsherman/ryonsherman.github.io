@@ -76,7 +76,14 @@
 <li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
 <li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
 </ul>
-<p>It has no GitHub repo — it was a weekend experiment in turning text into natural-sounding dialog without touching a microphone.</p></div>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Piper TTS is surprisingly good for local CPU</strong> — It runs real-time neural TTS on a laptop CPU with no GPU. Voice quality is decent across multiple models, and switching voices between lines is seamless.</li>
+<li><strong>Sentence-aware chunking matters</strong> — Piper has a maximum input length. Naively splitting at the character boundary produces broken audio mid-word. Chunking at sentence boundaries (500 chars) keeps segments natural.</li>
+<li><strong>Audio concatenation is trivial</strong> — Once you have individual WAV segments as 16-bit PCM byte arrays, joining them with silence padding is just array concatenation. Audio programming doesn't have to be complicated.</li>
+<li><strong>Voice mapping makes scripts flexible</strong> — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.</li>
+<li><strong>CLI-first design works</strong> — A simple <code>SPEAKER: dialog</code> format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.</li>
+</ul></div>
     </div>
     <!-- End Content -->
 

@@ -35,6 +35,10 @@ With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep betwee
 
 The limiting factor is the GPS cold-fix time, not the microcontroller power draw.
 
-## No GitHub repo
+## What I Learned
 
-This was a hardware hacking project to understand low-power GPS logging from scratch — no libraries for the GPS parsing (NMEA sentences are parsed character-by-character over SoftwareSerial), no RTC (time comes from the GPS fix), and no external storage.
+- **Low-power design = control every microamp** — The GPS module draws significant current, so switching its ground with a transistor makes it draw zero when off. During deep sleep the Nano pulls ~5 µA. Every component choice affects battery life.
+- **EEPROM is tiny but reliable** — 1 KB holds 67 GPS fix records with no filesystem overhead, no corruption risk from power loss, and no SD card that can shake loose. Sometimes the simplest storage is the best.
+- **Haversine distance checks save storage** — Checking whether the tracker actually moved before writing avoids filling the log with "still here" entries. It's a simple optimization that doubles useful recording time.
+- **Watchdog timer deep sleep** — The ATmega328p's watchdog timer wakes from deep sleep at configurable intervals without an external RTC. The GPS itself provides the time — no extra chip needed.
+- **NMEA parsing from scratch** — GPS sentences like `$GPGGA` are just comma-separated text. Parsing them character-by-character over SoftwareSerial teaches you exactly what information a GPS fix contains and why.
