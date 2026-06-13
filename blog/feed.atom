@@ -10,6 +10,43 @@
   </author>
   
   <entry>
+    <title>Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</title>
+    <link href="https://ryonsherman.github.io/blog/arduino-wifi-jammer.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/arduino-wifi-jammer.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
+<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img alt="12-unit jamming array on channel 1 in controlled lab environment" src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" /></a></p>
+<h2>Architecture</h2>
+<p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
+<p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
+<h2>Fan-out algorithm</h2>
+<p>Instead of all 12 slaves hitting the same center frequency, they spread across the full 22MHz Wi-Fi channel width at 2MHz intervals:</p>
+<pre><code>center_freq + (local_idx * 2) - (group_size - 1)
+</code></pre>
+<p>On channel 6 (center 2437 MHz), slave 0 transmits at 2426 MHz and slave 11 at 2448 MHz. This completely blankets the channel rather than leaving gaps between overlapping transmissions.</p>
+<h2>Operating modes</h2>
+<ul>
+<li><strong>Single channel</strong> — All 12 slaves fan out across one channel for maximum power density</li>
+<li><strong>Full spectrum</strong> — Slaves spread across 2415-2470 MHz at 5MHz spacing, covering all 13 channels</li>
+<li><strong>Custom</strong> — Assign any number of slaves to any channels (e.g. <code>set 4@1,2@6,2@11</code>)</li>
+<li><strong>Sweep</strong> — All slaves cycle channels 1-13 together at configurable dwell (default 200ms)</li>
+<li><strong>Adaptive</strong> — Master scans all channels for 2 seconds, identifies the busiest ones, and assigns slaves dynamically with auto-rescan every 30s</li>
+</ul>
+<h2>Patterns</h2>
+<p>Beyond continuous transmission, the system supports pulsed (alternating on/off), burst (custom duty cycle), and random (per-packet LFSR frequency hopping within the assigned band).</p>
+<h2>Hardware control</h2>
+<p>A 3-position ON-OFF-ON switch on the master provides instant physical control: position 1 triggers full-spectrum jamming, center is off for software control, position 3 starts sweep mode. This works without any PC connection.</p>
+<h2>Legal</h2>
+<blockquote>
+<p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
+</blockquote></content>
+  </entry>
+  
+  <entry>
     <title>Canary — A Cryptographic Proof-of-Life Android App</title>
     <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>

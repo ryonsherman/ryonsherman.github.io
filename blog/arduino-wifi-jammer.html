@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</h2>
+<span class="post-date">2026-06-12</span>
+<p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
+<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img alt="12-unit jamming array on channel 1 in controlled lab environment" src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" /></a></p>
+<h2 id="architecture">Architecture</h2>
+<p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
+<p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
+<h2 id="fan-out-algorithm">Fan-out algorithm</h2>
+<p>Instead of all 12 slaves hitting the same center frequency, they spread across the full 22MHz Wi-Fi channel width at 2MHz intervals:</p>
+<pre><code>center_freq + (local_idx * 2) - (group_size - 1)
+</code></pre>
+<p>On channel 6 (center 2437 MHz), slave 0 transmits at 2426 MHz and slave 11 at 2448 MHz. This completely blankets the channel rather than leaving gaps between overlapping transmissions.</p>
+<h2 id="operating-modes">Operating modes</h2>
+<ul>
+<li><strong>Single channel</strong> — All 12 slaves fan out across one channel for maximum power density</li>
+<li><strong>Full spectrum</strong> — Slaves spread across 2415-2470 MHz at 5MHz spacing, covering all 13 channels</li>
+<li><strong>Custom</strong> — Assign any number of slaves to any channels (e.g. <code>set 4@1,2@6,2@11</code>)</li>
+<li><strong>Sweep</strong> — All slaves cycle channels 1-13 together at configurable dwell (default 200ms)</li>
+<li><strong>Adaptive</strong> — Master scans all channels for 2 seconds, identifies the busiest ones, and assigns slaves dynamically with auto-rescan every 30s</li>
+</ul>
+<h2 id="patterns">Patterns</h2>
+<p>Beyond continuous transmission, the system supports pulsed (alternating on/off), burst (custom duty cycle), and random (per-packet LFSR frequency hopping within the assigned band).</p>
+<h2 id="hardware-control">Hardware control</h2>
+<p>A 3-position ON-OFF-ON switch on the master provides instant physical control: position 1 triggers full-spectrum jamming, center is off for software control, position 3 starts sweep mode. This works without any PC connection.</p>
+<h2 id="legal">Legal</h2>
+<blockquote>
+<p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
+</blockquote></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  Contact:
+  <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  Feed:
+  <li><a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  Source:
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  Validation:
+  <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
