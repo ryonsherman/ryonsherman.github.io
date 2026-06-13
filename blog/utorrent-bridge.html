@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>uTorrent Bridge — A Compatibility Layer Nobody Asked For</h2>
+<span class="post-date">2026-06-12</span>
+<p>Back in the early 2010s, uTorrent had a Web API and a few mobile apps — uRemote, Torrent-fu — that let you manage your torrents from your phone. The catch: they only worked with uTorrent. If you ran rTorrent on a headless server (as any self-respecting Linux user did), you were out of luck.</p>
+<p>So I built a bridge.</p>
+<p>uTorrent Bridge is a compatibility layer that emulates the uTorrent Web API. You point it at your actual torrent backend (rTorrent, Transmission, whatever) and it speaks uTorrent's API to the outside world. Mobile apps connect to the bridge, the bridge translates commands to the real backend, everyone goes home happy.</p>
+<h2 id="architecture">Architecture</h2>
+<p>A plugin system with two sides: a <strong>client</strong> module talks to the real torrent backend (rTorrent via XML-RPC, Transmission via its RPC, etc.), and a <strong>server</strong> module presents the uTorrent Web API to clients. The bridge instantiates both and connects them together.</p>
+<pre><code class="language-python">module = __import__('modules.%s' % kwargs['client']['module'])
+client = getattr(module, 'Client')
+self.client = client(**kwargs['client'])
+
+module = __import__('modules.%s' % kwargs['server']['module'])
+server = getattr(module, 'Server')
+self.server = server(**kwargs['server'])
+</code></pre>
+<p>The config was simple — pick your backend, pick your API flavor, set the ports:</p>
+<pre><code>[client]
+module = rtorrent
+address = 127.0.0.1
+port = 5000
+auth = xmlrpc
+
+[server]
+module = utorrent
+address = 127.0.0.1
+port = 8080
+auth = basic
+</code></pre>
+<h2 id="what-got-built">What Got Built</h2>
+<p>Enough to prove the concept. The module system worked — you could plug in different backends by dropping a Python file in <code>modules/</code>. The base classes in <code>lib/</code> defined the contract, and each module implemented the translation layer.</p>
+<p>Planned backends included rTorrent, Transmission, SABnzbd, and Hellanzb. In practice, only the rTorrent module got any real work done — and even that was mostly stubs. The project was abandoned long before it was useful.</p>
+<h2 id="why-it-didnt-go-further">Why It Didn't Go Further</h2>
+<p>The uTorrent Web API was undocumented, versioned by whim, and changed between releases. Keeping up would have been a full-time cat-and-mouse game. Meanwhile, better solutions already existed — rTorrent had its own mobile apps, Transmission had remote GUIs, and the whole "bridge" approach was inherently fragile.</p>
+<p>It was the kind of project that makes total sense at 2 AM and much less sense in the morning. The kind where you solve an interesting technical problem (API translation! Plugin architecture!) without stopping to ask whether the problem should exist at all.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Protocol translation is harder than it looks</strong> — every API has edge cases, and mapping one to another is never 1:1</li>
+<li><strong>Plugin architectures are fun to build</strong> — there's something satisfying about designing an interface that multiple backends can implement</li>
+<li><strong>Not every project needs to ship to be worth it</strong> — this one taught me more about HTTP APIs, RPC protocols, and system design than any tutorial could have</li>
+<li><strong>Sometimes the right call is to walk away</strong> — recognizing when a project has served its purpose (as a learning experience) and doesn't need to be finished is a skill in itself</li>
+</ul>
+<p>The code still sits in a Git repo, untouched since 2014. Python 2, <code>ConfigParser</code>, <code>__import__</code> string-based module loading — a time capsule of an era when these seemed like reasonable choices. I keep it around as a reminder that abandoned projects aren't failures. They're tuition.</p></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  Contact:
+  <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  Feed:
+  <li><a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  Source:
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  Validation:
+  <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
