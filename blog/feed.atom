@@ -114,6 +114,50 @@
   </entry>
   
   <entry>
+    <title>BC246T — A Serial Protocol Library for a Radio Scanner</title>
+    <link href="https://ryonsherman.github.io/blog/bc246t.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/bc246t.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>The Uniden BC246T is a handheld trunking scanner — it listens to police, fire, aircraft, and other radio traffic across a wide frequency range. Programming it by hand is tedious: scrolling through menus, entering frequencies one at a time, setting modulation and squelch codes. For anyone with more than a handful of channels, it's unbearable.</p>
+<p>So I reverse-engineered the serial protocol and wrote a Python library to control the thing from a computer.</p>
+<h2>The Protocol</h2>
+<p>The BC246T speaks a simple ASCII serial protocol at up to 57600 baud. Every command is a three-letter mnemonic followed by comma-separated arguments, terminated with <code>\r</code>. The scanner responds with the command echo, comma-separated values, and an OK/NG/ERR status.</p>
+<pre><code>PC → Radio:  MDL\r
+Radio → PC:  MDL,BC246T
+
+PC → Radio:  STS\r
+Radio → PC:  STS,[16 chars display],[16 chars mode],...
+</code></pre>
+<p>The library wraps every command as a Python method or property. <code>model</code> returns <code>"BC246T"</code>. <code>firmware</code> returns something like <code>"1.00"</code>. <code>status</code> returns a dict with the display lines, icon states, squelch status, battery level, and weather alert.</p>
+<p>You can read the scanner's current state, send keypresses, tune to arbitrary frequencies via Quick Search (VFO mode), and even power it off remotely.</p>
+<h2>Programming Mode</h2>
+<p>The real power is in Program Mode. Enter it, and you can read and write every setting the scanner has — systems, channels, groups, quick keys, lockouts, delays, attenuation, alert behaviors.</p>
+<p>The library exposes this as two main objects:</p>
+<p><strong>Settings</strong> — Backlight timeout, battery save, key beep, opening message (the two-line text shown at power-on), priority mode. Getting and setting is just property access:</p>
+<pre><code class="language-python">dev.settings.backlight = dev.settings.BACKLIGHT.INFINITE
+dev.settings.opening_message = (&quot;FREQ SCAN&quot;, &quot;   ONLINE   &quot;)
+</code></pre>
+<p><strong>Systems</strong> — A list-like object that represents the scanner's system database. Systems have types (Conventional, Motorola Type II, EDACS, LTR, etc.), names, quick keys, hold times, and lockout states. Each system contains channel groups, which contain channels.</p>
+<pre><code class="language-python">sys = Device.System(dev, sys_type=Device.System.SYS_TYPE.CONVENTIONAL)
+sys.name = &quot;AIR BAND&quot;
+sys.quick_key = 1
+dev.systems.append(sys)
+</code></pre>
+<p>The entire serial protocol spec is documented inline in the source code — every command, every response field, every edge case. I transcribed it from Uniden's reference docs so the code served as both library and documentation.</p>
+<h2>The AVR Autoprogrammer</h2>
+<p>The same repo contains a companion hardware project: an AVR microcontroller that reads scanner programming data from an SD card over SPI, using a FAT16 filesystem. The idea was to create a standalone device — plug in an SD card with your channel config, connect the AVR to the scanner's serial port, and it programs everything automatically. No computer needed.</p>
+<p>It initializes the USART, SPI, SD card, and FAT16 filesystem, then would read configuration files and send the appropriate serial commands to the scanner. The code is in C, targeting an 8 MHz AVR, with custom SPI and SD card drivers written from scratch.</p>
+<h2>Abandoned, But Complete</h2>
+<p>Unlike the uTorrent Bridge which was mostly stubs, the BC246T library is genuinely useful. The protocol implementation is thorough, the API is clean, and the documentation is excellent. I used it to program my scanner more than once.</p>
+<p>The AVR autoprogrammer never got past initialization and filesystem mounting — the FAT16 driver was written but the actual scanner programming logic was never implemented. Still, getting raw SPI talking to an SD card on a bare-metal AVR is a rite of passage, and this code captures that moment.</p>
+<p>It's Python 2, it uses <code>map</code> and <code>lambda</code> freely, and the tuple-unpacking syntax (<code>def opening_message(self, (l1_char, l2_char))</code>) is a fossil from an older Python. But it works. And 10+ years later, it's still a solid example of what you can do when you just read the datasheet and start writing code.</p></content>
+  </entry>
+  
+  <entry>
     <title>Canary — A Cryptographic Proof-of-Life Android App</title>
     <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>
