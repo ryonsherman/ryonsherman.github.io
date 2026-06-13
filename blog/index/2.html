@@ -55,22 +55,38 @@
     <!-- Content -->
     <div id="content">
       <div class="container">
-<h2>Enigma — A Simulated Enigma Machine in Python</h2>
-<span class="post-date">2026-06-12</span>
-<p>I wanted to understand how the Enigma machine actually worked, so I built one.</p>
-<p>This Python implementation simulates a full three-rotor Enigma — the same class of machine used by Germany during WWII. It has everything: rotors with historical wiring, turnover points, a plugboard, and a reflector.</p>
-<h2 id="the-signal-path">The signal path</h2>
-<p>Every time you press a key, the rightmost rotor steps forward. When a rotor reaches its turnover point (a specific letter), it kicks the rotor to its left. It's a mechanical odometer — III clicks through every letter, then II steps once, and so on.</p>
-<p>The electrical signal travels through the plugboard first (swapping pairs of letters), then forward through the rotors from right to left, hits the reflector (which bounces it back on a different path), then backward through the rotors left to right, and finally through the plugboard again. The result is the encrypted letter.</p>
-<p>Because of the reflector, encryption and decryption are the same operation — feeding the ciphertext back through the machine with the same settings gives you the plaintext. This is historically accurate and surprisingly elegant.</p>
-<h2 id="rotor-wiring">Rotor wiring</h2>
-<p>The 8 rotor types and 3 reflectors are modeled from the actual historical specifications. Each rotor has a unique substitution cipher and a turnover point — the letter at which it advances the next rotor. Rotors VI, VII, and VIII have two turnover points instead of one (a late-war feature).</p>
-<p>The ring setting offsets the wiring relative to the rotor's alphabet ring, adding another layer of key space.</p>
-<h2 id="brute-force-cracker">Brute-force cracker</h2>
-<p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
-<p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
-<p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
-<p>It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.</p></div>
+<h2>Blog</h2>
+
+
+<div class="blog-post">
+  <h3><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></h3>
+  <span class="post-date">2026-06-12</span>
+  <p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
+<p>Voxscript is a Python CLI that reads a text file of dialog lines and produces a WAV file using <a href="https://github.com/rhasspy/piper">Piper TTS</a> — a fast neural text-to-speech engine that runs entirely locally on a CPU.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>You write a script in a simple <code>SPEAKER: dialog</code> format with blank lines for pacing. The tool parses each utterance, pipes them through Piper voice models, and concatenates everything into a single WAV with configurable silence between speakers.</p>
+<h2 id="multi-voice-support">Multi-voice support</h2>
+<p>You provide a JSON voice map to assign different Piper voices to different speakers. Any speaker not mapped falls back to a default voice.</p>
+<h2 id="technical-bits">Technical bits</h2>
+<ul>
+<li>Text is chunked at 500 characters (sentence-aware) before synthesis, keeping audio segments manageable for Piper</li>
+<li>Audio is concatenated as 16-bit PCM WAV, mono</li>
+<li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
+<li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
+</ul>
+<p>It has no GitHub repo — it was a weekend experiment in turning text into natural-sounding dialog without touching a microphone.</p>
+</div>
+
+
+
+<div class="pagination">
+  
+  <a href="/blog/index/1.html" class="prev">&laquo; Newer</a>
+  
+  <span class="page-info">Page 2 of 2</span>
+  
+</div>
+</div>
     </div>
     <!-- End Content -->
 

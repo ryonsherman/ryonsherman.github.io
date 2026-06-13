@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</h2>
+<span class="post-date">2026-06-12</span>
+<p>Two AMD-powered machines, no dedicated GPU, no CUDA. Just a Ryzen 9 6900HX with a Radeon 680M iGPU (RDNA2, Vulkan-only) and 23 GB of shared RAM on each. This stack runs LLM inference, image generation, text-to-speech, and a multi-agent tool ecosystem — all in Docker, all on consumer hardware.</p>
+<h2 id="architecture">Architecture</h2>
+<p>Two identical workstations on a local LAN. Machine 1 runs the full LLM server stack (llama.cpp with RPC, Open WebUI, LiteLLM, Kokoro TTS, Caddy reverse proxy). Machine 2 acts as a remote RPC worker, contributing its GPU memory for distributed inference. Both machines also run stable-diffusion.cpp for image generation with FLUX.1-dev.</p>
+<p>The key insight: llama.cpp's RPC support distributes model layers across GPU workers. With <code>--tensor-split 0.5,0.5</code>, each endpoint gets half the model layers. Both iGPUs combined can fit models that neither could run alone — like Qwen3.5-35B-A3B at Q4_K_M (~20 GiB), split roughly 10 GiB per machine.</p>
+<h2 id="model-inference">Model Inference</h2>
+<p>The llama-server container itself has no GPU access — it's purely a coordinator. All GPU work is delegated to RPC workers:</p>
+<pre><code>llama-server ──RPC──► llama-rpc (local, Vulkan0, ~50% of layers)
+                │
+                └──RPC──► remote:50052 (remote, Vulkan0, ~50% of layers)
+</code></pre>
+<p>Three models have been tested:</p>
+<ul>
+<li><strong>Qwen3.5-35B-A3B Q4_K_M</strong> (~20 GiB) — MoE with 3B active parameters. General chat + coding.</li>
+<li><strong>Qwen3.6-35B-A3B Q4_K_M</strong> (~20 GiB) — ~14% faster, better coding.</li>
+<li><strong>DeepSeek-Coder-33B-Instruct Q4_K_M</strong> (~19 GiB) — Dense 33B, all params active. Slower.</li>
+</ul>
+<p>The MoE models are ~10x faster than the dense 33B because only 3B parameters activate per token. File size is similar but throughput is vastly different. On memory-constrained hardware, MoE is the clear winner.</p>
+<p>Model switching is handled by <code>llama-docker.sh</code> — it saves the model path, rewrites LiteLLM config, and restarts services. Vision models are auto-detected via <code>.mmproj.gguf</code> files alongside the GGUF.</p>
+<h2 id="image-generation">Image Generation</h2>
+<p>stable-diffusion.cpp is built from source with Vulkan support. FLUX.1-dev uses four model files: the diffusion model (6.5 GB), VAE, CLIP-L, and T5-XXL. LoRA support is built in. A separate instance on machine 2 runs FLUX.1-Kontext-dev for instruction-based image editing (remixing).</p>
+<p>Only one stack runs at a time — both use port 8000 and share the GPU memory.</p>
+<h2 id="the-mcp-tool-ecosystem">The MCP Tool Ecosystem</h2>
+<p>Four Model Context Protocol servers run as separate containers, all auto-injected into Open WebUI via a middleware patch:</p>
+<ul>
+<li><strong>Web Search</strong> — DuckDuckGo + Reddit search (consolidated from separate services)</li>
+<li><strong>Memory</strong> — Long-term semantic search with fastembed</li>
+<li><strong>Memory (read-only)</strong> — For temporary chats (<code>local:*</code> prefix)</li>
+<li><strong>Local Assistant</strong> — Weather (NWS API) and traffic (TomTom API), with TTS-friendly speech output</li>
+</ul>
+<p>The middleware patch checks whether a chat is temporary and swaps writeable memory for read-only accordingly.</p>
+<h2 id="text-to-speech">Text-to-Speech</h2>
+<p>Kokoro-FastAPI runs on CPU (the GPU is busy with the LLM). The <code>af_heart</code> voice is remapped to <code>af_bella</code> for a warmer tone. Two patches are applied at container entrypoint: unit normalization ("mph" → "miles per hour") and compass direction expansion ("WNW" → "west-northwest").</p>
+<h2 id="litellm-api-proxy">LiteLLM API Proxy</h2>
+<p>LiteLLM exposes the active model at <code>/v1/</code> on port 4000 with authentication. This means any OpenAI-compatible tool can connect — aider, Continue VS Code extension, or anything else:</p>
+<pre><code>aider --model openai/qwen3.6 --openai-api-base http://workstation1:4000/v1
+</code></pre>
+<h2 id="slot-monitor">Slot Monitor</h2>
+<p>A live terminal UI (<code>monitor.py</code>) polls llama-server's <code>/slots</code> and <code>/health</code> endpoints every 3 seconds. It tracks per-slot activity (prefill/generating/idle), tokens decoded and remaining, instant tok/s, and ETA. Completion history auto-persists to JSONL. Two rendering modes: Rich (color, progress bars) and Plain (ASCII-only) for headless SSH sessions.</p>
+<h2 id="key-lessons">Key Lessons</h2>
+<ol>
+<li>
+<p><strong>MoE vs Dense</strong> — 35B MoE (3B active) is ~10x faster than 33B dense. Same file size, vastly different throughput. Always prefer MoE on constrained hardware.</p>
+</li>
+<li>
+<p><strong>RPC decouples GPU access</strong> — The llama-server container doesn't need <code>/dev/dri</code>. All GPU work is delegated to RPC workers. Startup ordering matters: RPC workers need time to initialize Vulkan before llama-server connects.</p>
+</li>
+<li>
+<p><strong>Startup race conditions</strong> — Docker Compose <code>--depends-on</code> only waits for container start, not service readiness. A full stop/start cycle is more reliable than individual restarts.</p>
+</li>
+<li>
+<p><strong>Context budgeting</strong> — With 23 GB shared RAM and ~20 GiB models, KV cache space is tight. 65k context works for MoE models but would need reduction for dense models.</p>
+</li>
+<li>
+<p><strong>Two machines, one cluster</strong> — Spreading inference across two consumer laptops over LAN is viable. Network latency adds ~5-10% overhead but doubles the available GPU memory. The same approach could scale to more nodes for larger models.</p>
+</li>
+</ol></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  Contact:
+  <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  Feed:
+  <li><a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  Source:
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  Validation:
+  <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
