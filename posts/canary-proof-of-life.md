@@ -1,5 +1,6 @@
 title: Canary — A Cryptographic Proof-of-Life Android App
 date: 2026-06-12
+---
 
 I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.
 

@@ -10,6 +10,39 @@
   </author>
   
   <entry>
+    <title>Canary — A Cryptographic Proof-of-Life Android App</title>
+    <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
+<h2>How it works</h2>
+<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
+<ul>
+<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
+<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
+<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
+<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
+</ul>
+<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
+<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
+<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
+<h2>Chain integrity</h2>
+<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
+<ul>
+<li>Forging a valid ECDSA signature without access to the private key</li>
+<li>Rewriting every subsequent canary's hash reference</li>
+<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
+</ul>
+<p>The public dashboard at <code>ryonsherman.github.io/canary/</code> verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
+<h2>Why?</h2>
+<p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p></content>
+  </entry>
+  
+  <entry>
     <title>Hello World</title>
     <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/hello-world.html</id>
@@ -37,41 +70,6 @@
 - Replaced insecure import with <code>importlib.util</code>
 - Added proper test suite
 - Modern packaging with <code>pyproject.toml</code></p></content>
-  </entry>
-  
-  <entry>
-    <title>canary-proof-of-life.md</title>
-    <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>
-    <published>T00:00:00Z</published>
-    <updated>T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>title: Canary — A Cryptographic Proof-of-Life Android App
-date: 2026-06-12</p>
-<p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
-<h2>How it works</h2>
-<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
-<ul>
-<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
-<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
-<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
-<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
-</ul>
-<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
-<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
-<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
-<h2>Chain integrity</h2>
-<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
-<ul>
-<li>Forging a valid ECDSA signature without access to the private key</li>
-<li>Rewriting every subsequent canary's hash reference</li>
-<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
-</ul>
-<p>The public dashboard at <code>ryonsherman.github.io/canary/</code> verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
-<h2>Why?</h2>
-<p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p></content>
   </entry>
   
 </feed>
