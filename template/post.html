@@ -1,0 +1,6 @@
+{% extends 'default/index.html' %}
+{%- block content %}
+<h2>{{ post.title }}</h2>
+<span class="post-date">{{ post.date }}</span>
+{{ post.body|markdown }}
+{%- endblock %}
