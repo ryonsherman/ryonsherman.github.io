@@ -28,11 +28,11 @@
   
     <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
   
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
     <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
   
     <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
-  
-    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
   
   </ul>
 </div>
@@ -102,6 +102,29 @@
 <p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
 <h2 id="why">Why?</h2>
 <p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p>
+</div>
+
+<div class="blog-post">
+  <h3><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></h3>
+  <span class="post-date">2026-06-12</span>
+  <p>Post encrypted messages to a public GitHub repo. Anyone can see the files exist, but without the right ID they're just random noise. Since every message is tried by brute force during receive, there's no way to tell which message belongs to which recipient — or even if any given message is real at all.</p>
+<p><a href="https://github.com/ryonsherman/cryptboard">cryptboard on GitHub</a></p>
+<h2 id="how-it-works">How it works</h2>
+<p>A single Python script using AES-256-CBC. The ID is a 64-character hex string — SHA-256 hashed into an AES key. Each message is a JSON file in <code>messages/</code> with two fields: <code>h</code> (encrypted header, plaintext is always <code>CRYPTBOARD</code>) and <code>b</code> (encrypted body). Random IV per message. No sender info, no timestamps, no metadata of any kind.</p>
+<p>Sending forks the repo, commits a new message file, and opens a pull request. A GitHub Actions workflow validates it's an additive-only change to <code>messages/</code> with valid base64 — then auto-merges. Receiving does a shallow clone and brute-force decrypts every header. Header decrypts are microseconds, so scanning thousands of messages is fast.</p>
+<h2 id="the-header-trick">The header trick</h2>
+<p>The fixed header plaintext is key to the design. Instead of deriving per-message metadata (which would leak information), every message includes an encrypted <code>CRYPTBOARD</code> string. When you receive, you try decrypting each header with your key. Only yours succeed. This means the receiver knows nothing about which blobs are theirs until they try — and an attacker with the full repo can't distinguish real messages from noise without every possible key.</p>
+<h2 id="no-metadata">No metadata</h2>
+<p>No timestamps in the message body. No encryption metadata beyond the IV. No sender identity. The UUID filenames are random. The CI workflow rejects any PR that modifies or deletes existing files — the repo is append-only. This means even GitHub itself can't tell you which user sent which message, since all sends go through PRs from forks.</p>
+<h2 id="plausible-deniability">Plausible deniability</h2>
+<p>Since any message can be decrypted by any ID (the header just won't match), there's no way to prove a given blob is intended for a given recipient. Combined with random filenames and no metadata, every message in the repo is indistinguishable from noise to anyone without the right key.</p>
+<h2 id="usage">Usage</h2>
+<pre><code>cryptboard gen-id                      # generate a 64-char hex ID
+cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
+cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
+cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
+</code></pre>
+<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
 </div>
 
 <div class="blog-post">

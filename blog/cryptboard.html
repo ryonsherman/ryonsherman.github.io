@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>cryptboard — Public Encrypted Dead Drops Over GitHub</h2>
+<span class="post-date">2026-06-12</span>
+<p>Post encrypted messages to a public GitHub repo. Anyone can see the files exist, but without the right ID they're just random noise. Since every message is tried by brute force during receive, there's no way to tell which message belongs to which recipient — or even if any given message is real at all.</p>
+<p><a href="https://github.com/ryonsherman/cryptboard">cryptboard on GitHub</a></p>
+<h2 id="how-it-works">How it works</h2>
+<p>A single Python script using AES-256-CBC. The ID is a 64-character hex string — SHA-256 hashed into an AES key. Each message is a JSON file in <code>messages/</code> with two fields: <code>h</code> (encrypted header, plaintext is always <code>CRYPTBOARD</code>) and <code>b</code> (encrypted body). Random IV per message. No sender info, no timestamps, no metadata of any kind.</p>
+<p>Sending forks the repo, commits a new message file, and opens a pull request. A GitHub Actions workflow validates it's an additive-only change to <code>messages/</code> with valid base64 — then auto-merges. Receiving does a shallow clone and brute-force decrypts every header. Header decrypts are microseconds, so scanning thousands of messages is fast.</p>
+<h2 id="the-header-trick">The header trick</h2>
+<p>The fixed header plaintext is key to the design. Instead of deriving per-message metadata (which would leak information), every message includes an encrypted <code>CRYPTBOARD</code> string. When you receive, you try decrypting each header with your key. Only yours succeed. This means the receiver knows nothing about which blobs are theirs until they try — and an attacker with the full repo can't distinguish real messages from noise without every possible key.</p>
+<h2 id="no-metadata">No metadata</h2>
+<p>No timestamps in the message body. No encryption metadata beyond the IV. No sender identity. The UUID filenames are random. The CI workflow rejects any PR that modifies or deletes existing files — the repo is append-only. This means even GitHub itself can't tell you which user sent which message, since all sends go through PRs from forks.</p>
+<h2 id="plausible-deniability">Plausible deniability</h2>
+<p>Since any message can be decrypted by any ID (the header just won't match), there's no way to prove a given blob is intended for a given recipient. Combined with random filenames and no metadata, every message in the repo is indistinguishable from noise to anyone without the right key.</p>
+<h2 id="usage">Usage</h2>
+<pre><code>cryptboard gen-id                      # generate a 64-char hex ID
+cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
+cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
+cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
+</code></pre>
+<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  Contact:
+  <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  Feed:
+  <li><a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  Source:
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  Validation:
+  <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
