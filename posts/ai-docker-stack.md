@@ -1,4 +1,5 @@
 title: Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack
+description: Running LLMs, image generation, TTS, and a multi-agent tool ecosystem on two AMD-powered consumer machines with no dedicated GPU.
 date: 2026-06-12
 ---
 

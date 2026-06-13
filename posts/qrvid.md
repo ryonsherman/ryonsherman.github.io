@@ -1,4 +1,5 @@
 title: QRVid — Store Binary Data in QR Code Videos
+description: Encode arbitrary binary data into QR code videos for YouTube storage and decode it back. Yes, it works.
 date: 2026-06-12
 ---
 

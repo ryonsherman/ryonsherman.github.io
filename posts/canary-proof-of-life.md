@@ -1,4 +1,5 @@
 title: Canary — A Cryptographic Proof-of-Life Android App
+description: An Android app that turns NFC tags into tamper-evident, Bitcoin-anchored daily check-in proofs.
 date: 2026-06-12
 ---
 

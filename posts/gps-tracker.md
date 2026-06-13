@@ -1,4 +1,5 @@
 title: GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage
+description: A battery-powered Arduino GPS tracker that logs positions to EEPROM — no SD card, no cloud, just the chip.
 date: 2026-06-12
 ---
 

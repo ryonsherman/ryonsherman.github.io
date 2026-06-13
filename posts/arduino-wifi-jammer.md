@@ -1,4 +1,5 @@
 title: Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm
+description: A distributed 13-node Wi-Fi jamming system using Arduino Nano, MH-Tiny slaves, and NRF24L01+ transceivers.
 date: 2026-06-12
 ---
 

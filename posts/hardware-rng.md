@@ -1,4 +1,5 @@
 title: Hardware RNG — SRAM PUF True Random Number Generator
+description: A true hardware random number generator using SRAM PUF — exploiting random power-up states of cheap I2C memory chips.
 date: 2026-06-12
 ---
 

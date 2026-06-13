@@ -37,10 +37,17 @@ def parse_post(filepath):
             key, _, val = line.partition(':')
             meta[key.strip()] = val.strip()
 
+    body_text = body.strip()
+    desc = meta.get('description', '')
+    if not desc:
+        first_line = body_text.split('\n\n')[0].strip()
+        desc = first_line[:200].rstrip('.') + '.' if len(first_line) > 200 else first_line
+
     return {
         'title': meta.get('title', title_from_filename(filepath)),
         'date': meta.get('date', ''),
-        'body': body.strip(),
+        'body': body_text,
+        'description': desc,
         'slug': slugify(meta.get('slug', os.path.basename(filepath))),
     }
 

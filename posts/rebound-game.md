@@ -1,4 +1,5 @@
 title: Rebound — A 4-Player Multiplayer Cannon Game
+description: A 4-player castle battle game with bouncing projectiles, power-ups, AI, and online multiplayer.
 date: 2026-06-12
 ---
 

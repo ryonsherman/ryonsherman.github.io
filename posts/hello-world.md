@@ -1,4 +1,5 @@
 title: Hello World — Noise, a Minimal Static Site Generator
+description: Noise is a minimal static site generator written in Python. This post introduces the project and its features.
 date: 2026-06-12
 ---
 

@@ -1,4 +1,5 @@
 title: Enigma — A Simulated Enigma Machine in Python
+description: A Python simulation of the Enigma machine with 8 rotor wirings, plugboard, ring settings, and a brute-force cracker.
 date: 2026-06-12
 ---
 

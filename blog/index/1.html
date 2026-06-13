@@ -61,330 +61,61 @@
 <div class="blog-post">
   <h3><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>Two AMD-powered machines, no dedicated GPU, no CUDA. Just a Ryzen 9 6900HX with a Radeon 680M iGPU (RDNA2, Vulkan-only) and 23 GB of shared RAM on each. This stack runs LLM inference, image generation, text-to-speech, and a multi-agent tool ecosystem — all in Docker, all on consumer hardware.</p>
-<h2 id="architecture">Architecture</h2>
-<p>Two identical workstations on a local LAN. Machine 1 runs the full LLM server stack (llama.cpp with RPC, Open WebUI, LiteLLM, Kokoro TTS, Caddy reverse proxy). Machine 2 acts as a remote RPC worker, contributing its GPU memory for distributed inference. Both machines also run stable-diffusion.cpp for image generation with FLUX.1-dev.</p>
-<p>The key insight: llama.cpp's RPC support distributes model layers across GPU workers. With <code>--tensor-split 0.5,0.5</code>, each endpoint gets half the model layers. Both iGPUs combined can fit models that neither could run alone — like Qwen3.5-35B-A3B at Q4_K_M (~20 GiB), split roughly 10 GiB per machine.</p>
-<h2 id="model-inference">Model Inference</h2>
-<p>The llama-server container itself has no GPU access — it's purely a coordinator. All GPU work is delegated to RPC workers:</p>
-<pre><code>llama-server ──RPC──► llama-rpc (local, Vulkan0, ~50% of layers)
-                │
-                └──RPC──► remote:50052 (remote, Vulkan0, ~50% of layers)
-</code></pre>
-<p>Three models have been tested:</p>
-<ul>
-<li><strong>Qwen3.5-35B-A3B Q4_K_M</strong> (~20 GiB) — MoE with 3B active parameters. General chat + coding.</li>
-<li><strong>Qwen3.6-35B-A3B Q4_K_M</strong> (~20 GiB) — ~14% faster, better coding.</li>
-<li><strong>DeepSeek-Coder-33B-Instruct Q4_K_M</strong> (~19 GiB) — Dense 33B, all params active. Slower.</li>
-</ul>
-<p>The MoE models are ~10x faster than the dense 33B because only 3B parameters activate per token. File size is similar but throughput is vastly different. On memory-constrained hardware, MoE is the clear winner.</p>
-<p>Model switching is handled by <code>llama-docker.sh</code> — it saves the model path, rewrites LiteLLM config, and restarts services. Vision models are auto-detected via <code>.mmproj.gguf</code> files alongside the GGUF.</p>
-<h2 id="image-generation">Image Generation</h2>
-<p>stable-diffusion.cpp is built from source with Vulkan support. FLUX.1-dev uses four model files: the diffusion model (6.5 GB), VAE, CLIP-L, and T5-XXL. LoRA support is built in. A separate instance on machine 2 runs FLUX.1-Kontext-dev for instruction-based image editing (remixing).</p>
-<p>Only one stack runs at a time — both use port 8000 and share the GPU memory.</p>
-<h2 id="the-mcp-tool-ecosystem">The MCP Tool Ecosystem</h2>
-<p>Four Model Context Protocol servers run as separate containers, all auto-injected into Open WebUI via a middleware patch:</p>
-<ul>
-<li><strong>Web Search</strong> — DuckDuckGo + Reddit search (consolidated from separate services)</li>
-<li><strong>Memory</strong> — Long-term semantic search with fastembed</li>
-<li><strong>Memory (read-only)</strong> — For temporary chats (<code>local:*</code> prefix)</li>
-<li><strong>Local Assistant</strong> — Weather (NWS API) and traffic (TomTom API), with TTS-friendly speech output</li>
-</ul>
-<p>The middleware patch checks whether a chat is temporary and swaps writeable memory for read-only accordingly.</p>
-<h2 id="text-to-speech">Text-to-Speech</h2>
-<p>Kokoro-FastAPI runs on CPU (the GPU is busy with the LLM). The <code>af_heart</code> voice is remapped to <code>af_bella</code> for a warmer tone. Two patches are applied at container entrypoint: unit normalization ("mph" → "miles per hour") and compass direction expansion ("WNW" → "west-northwest").</p>
-<h2 id="litellm-api-proxy">LiteLLM API Proxy</h2>
-<p>LiteLLM exposes the active model at <code>/v1/</code> on port 4000 with authentication. This means any OpenAI-compatible tool can connect — aider, Continue VS Code extension, or anything else:</p>
-<pre><code>aider --model openai/qwen3.6 --openai-api-base http://workstation1:4000/v1
-</code></pre>
-<h2 id="slot-monitor">Slot Monitor</h2>
-<p>A live terminal UI (<code>monitor.py</code>) polls llama-server's <code>/slots</code> and <code>/health</code> endpoints every 3 seconds. It tracks per-slot activity (prefill/generating/idle), tokens decoded and remaining, instant tok/s, and ETA. Completion history auto-persists to JSONL. Two rendering modes: Rich (color, progress bars) and Plain (ASCII-only) for headless SSH sessions.</p>
-<h2 id="key-lessons">Key Lessons</h2>
-<ol>
-<li>
-<p><strong>MoE vs Dense</strong> — 35B MoE (3B active) is ~10x faster than 33B dense. Same file size, vastly different throughput. Always prefer MoE on constrained hardware.</p>
-</li>
-<li>
-<p><strong>RPC decouples GPU access</strong> — The llama-server container doesn't need <code>/dev/dri</code>. All GPU work is delegated to RPC workers. Startup ordering matters: RPC workers need time to initialize Vulkan before llama-server connects.</p>
-</li>
-<li>
-<p><strong>Startup race conditions</strong> — Docker Compose <code>--depends-on</code> only waits for container start, not service readiness. A full stop/start cycle is more reliable than individual restarts.</p>
-</li>
-<li>
-<p><strong>Context budgeting</strong> — With 23 GB shared RAM and ~20 GiB models, KV cache space is tight. 65k context works for MoE models but would need reduction for dense models.</p>
-</li>
-<li>
-<p><strong>Two machines, one cluster</strong> — Spreading inference across two consumer laptops over LAN is viable. Network latency adds ~5-10% overhead but doubles the available GPU memory. The same approach could scale to more nodes for larger models.</p>
-</li>
-</ol>
+  <p>Running LLMs, image generation, TTS, and a multi-agent tool ecosystem on two AMD-powered consumer machines with no dedicated GPU.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
-<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" width="768" alt="12-unit jamming array on channel 1"></a></p>
-<h2 id="architecture">Architecture</h2>
-<p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
-<p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
-<h2 id="fan-out-algorithm">Fan-out algorithm</h2>
-<p>Instead of all 12 slaves hitting the same center frequency, they spread across the full 22MHz Wi-Fi channel width at 2MHz intervals:</p>
-<pre><code>center_freq + (local_idx * 2) - (group_size - 1)
-</code></pre>
-<p>On channel 6 (center 2437 MHz), slave 0 transmits at 2426 MHz and slave 11 at 2448 MHz. This completely blankets the channel rather than leaving gaps between overlapping transmissions.</p>
-<h2 id="operating-modes">Operating modes</h2>
-<ul>
-<li><strong>Single channel</strong> — All 12 slaves fan out across one channel for maximum power density</li>
-<li><strong>Full spectrum</strong> — Slaves spread across 2415-2470 MHz at 5MHz spacing, covering all 13 channels</li>
-<li><strong>Custom</strong> — Assign any number of slaves to any channels (e.g. <code>set 4@1,2@6,2@11</code>)</li>
-<li><strong>Sweep</strong> — All slaves cycle channels 1-13 together at configurable dwell (default 200ms)</li>
-<li><strong>Adaptive</strong> — Master scans all channels for 2 seconds, identifies the busiest ones, and assigns slaves dynamically with auto-rescan every 30s</li>
-</ul>
-<h2 id="patterns">Patterns</h2>
-<p>Beyond continuous transmission, the system supports pulsed (alternating on/off), burst (custom duty cycle), and random (per-packet LFSR frequency hopping within the assigned band).</p>
-<h2 id="hardware-control">Hardware control</h2>
-<p>A 3-position ON-OFF-ON switch on the master provides instant physical control: position 1 triggers full-spectrum jamming, center is off for software control, position 3 starts sweep mode. This works without any PC connection.</p>
-<h2 id="legal">Legal</h2>
-<blockquote>
-<p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
-</blockquote>
+  <p>A distributed 13-node Wi-Fi jamming system using Arduino Nano, MH-Tiny slaves, and NRF24L01+ transceivers.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
-<h2 id="how-it-works">How it works</h2>
-<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
-<ul>
-<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
-<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
-<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
-<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
-</ul>
-<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
-<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
-<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
-<h2 id="chain-integrity">Chain integrity</h2>
-<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
-<ul>
-<li>Forging a valid ECDSA signature without access to the private key</li>
-<li>Rewriting every subsequent canary's hash reference</li>
-<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
-</ul>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
-<h2 id="why">Why?</h2>
-<p>Because proving you're alive shouldn't require a centralized service. The canary protocol is a simple, auditable, and cryptographically sound way to generate public proof-of-life signals that can be verified by anyone, anywhere, forever.</p>
+  <p>An Android app that turns NFC tags into tamper-evident, Bitcoin-anchored daily check-in proofs.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>Post encrypted messages to a public GitHub repo. Anyone can see the files exist, but without the right ID they're just random noise. Since every message is tried by brute force during receive, there's no way to tell which message belongs to which recipient — or even if any given message is real at all.</p>
-<p><a href="https://github.com/ryonsherman/cryptboard">cryptboard on GitHub</a></p>
-<h2 id="how-it-works">How it works</h2>
-<p>A single Python script using AES-256-CBC. The ID is a 64-character hex string — SHA-256 hashed into an AES key. Each message is a JSON file in <code>messages/</code> with two fields: <code>h</code> (encrypted header, plaintext is always <code>CRYPTBOARD</code>) and <code>b</code> (encrypted body). Random IV per message. No sender info, no timestamps, no metadata of any kind.</p>
-<p>Sending forks the repo, commits a new message file, and opens a pull request. A GitHub Actions workflow validates it's an additive-only change to <code>messages/</code> with valid base64 — then auto-merges. Receiving does a shallow clone and brute-force decrypts every header. Header decrypts are microseconds, so scanning thousands of messages is fast.</p>
-<h2 id="the-header-trick">The header trick</h2>
-<p>The fixed header plaintext is key to the design. Instead of deriving per-message metadata (which would leak information), every message includes an encrypted <code>CRYPTBOARD</code> string. When you receive, you try decrypting each header with your key. Only yours succeed. This means the receiver knows nothing about which blobs are theirs until they try — and an attacker with the full repo can't distinguish real messages from noise without every possible key.</p>
-<h2 id="no-metadata">No metadata</h2>
-<p>No timestamps in the message body. No encryption metadata beyond the IV. No sender identity. The UUID filenames are random. The CI workflow rejects any PR that modifies or deletes existing files — the repo is append-only. This means even GitHub itself can't tell you which user sent which message, since all sends go through PRs from forks.</p>
-<h2 id="plausible-deniability">Plausible deniability</h2>
-<p>Since any message can be decrypted by any ID (the header just won't match), there's no way to prove a given blob is intended for a given recipient. Combined with random filenames and no metadata, every message in the repo is indistinguishable from noise to anyone without the right key.</p>
-<h2 id="usage">Usage</h2>
-<pre><code>cryptboard gen-id                      # generate a 64-char hex ID
-cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
-cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
-cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
-</code></pre>
-<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
+  <p>Public encrypted dead drops over GitHub — anyone can see the files, but only the intended recipient can read them.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>I wanted to understand how the Enigma machine actually worked, so I built one.</p>
-<p>This Python implementation simulates a full three-rotor Enigma — the same class of machine used by Germany during WWII. It has everything: rotors with historical wiring, turnover points, a plugboard, and a reflector.</p>
-<h2 id="the-signal-path">The signal path</h2>
-<p>Every time you press a key, the rightmost rotor steps forward. When a rotor reaches its turnover point (a specific letter), it kicks the rotor to its left. It's a mechanical odometer — III clicks through every letter, then II steps once, and so on.</p>
-<p>The electrical signal travels through the plugboard first (swapping pairs of letters), then forward through the rotors from right to left, hits the reflector (which bounces it back on a different path), then backward through the rotors left to right, and finally through the plugboard again. The result is the encrypted letter.</p>
-<p>Because of the reflector, encryption and decryption are the same operation — feeding the ciphertext back through the machine with the same settings gives you the plaintext. This is historically accurate and surprisingly elegant.</p>
-<h2 id="rotor-wiring">Rotor wiring</h2>
-<p>The 8 rotor types and 3 reflectors are modeled from the actual historical specifications. Each rotor has a unique substitution cipher and a turnover point — the letter at which it advances the next rotor. Rotors VI, VII, and VIII have two turnover points instead of one (a late-war feature).</p>
-<p>The ring setting offsets the wiring relative to the rotor's alphabet ring, adding another layer of key space.</p>
-<h2 id="brute-force-cracker">Brute-force cracker</h2>
-<p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
-<p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
-<p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
-<p>It has no GitHub repo — just a weekend spent learning how the electro-mechanical cipher machine that shaped cryptography history actually ticks.</p>
+  <p>A Python simulation of the Enigma machine with 8 rotor wirings, plugboard, ring settings, and a brute-force cracker.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>I built a battery-powered GPS tracker on an Arduino Nano that logs positions to internal EEPROM — no SD card, no breakout board, no cloud service. Just the chip and a GPS module.</p>
-<h2 id="how-it-works">How it works</h2>
-<p>Power up, and the Nano wakes, powers the GPS module via a transistor switch, acquires a fix, logs the position, kills power to the GPS, opens a 5-second serial command window, then goes into watchdog-timer deep sleep. Repeat on the configured interval.</p>
-<p>The whole power cycle is controlled by a 2N2222 transistor on D4 — GPS ground is switched so it draws zero current when off. During deep sleep the Nano itself pulls ~5µA.</p>
-<h2 id="storage-in-eeprom">Storage in EEPROM</h2>
-<p>The ATmega328p has 1KB of EEPROM. With 10-byte records (4 bytes lat, 4 bytes lon, 2 bytes dwell counter), that's 67 positions in a ring buffer. Oldest records are overwritten when full.</p>
-<p>The dwell counter tracks how many consecutive log cycles the tracker stayed in the same spot, which is useful for inferring parked vs. moving time.</p>
-<p>Data is retrieved over serial with a <code>D</code> command that dumps CSV. Python scripts then convert to GPX/KML for mapping, or snap to roads using OSRM's free match API.</p>
-<h2 id="distance-threshold">Distance threshold</h2>
-<p>A movement check uses the haversine approximation — lat * 111320 m/°, lon * 111320 * cos(lat) m/° — and compares squared distance against a configurable threshold. If the tracker hasn't moved far enough, it increments the dwell counter instead of writing a new record. This saves storage for only meaningful location changes.</p>
-<h2 id="battery-life">Battery life</h2>
-<p>With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep between cycles:</p>
-<table>
-<thead>
-<tr>
-<th>Interval</th>
-<th>Runtime</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>10 min</td>
-<td>~23 days</td>
-</tr>
-<tr>
-<td>15 min</td>
-<td>~34 days</td>
-</tr>
-<tr>
-<td>30 min</td>
-<td>~2 months</td>
-</tr>
-</tbody>
-</table>
-<p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
-<h2 id="no-github-repo">No GitHub repo</h2>
-<p>This was a hardware hacking project to understand low-power GPS logging from scratch — no libraries for the GPS parsing (NMEA sentences are parsed character-by-character over SoftwareSerial), no RTC (time comes from the GPS fix), and no external storage.</p>
+  <p>A battery-powered Arduino GPS tracker that logs positions to EEPROM — no SD card, no cloud, just the chip.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>I built a true hardware random number generator using an Arduino Nano and some dirt-cheap I2C SRAM chips. It exploits the random power-up state of uninitialized static RAM to generate entropy — the same physical phenomenon used in SRAM Physical Unclonable Functions (PUFs) for device fingerprinting and cryptographic key generation.</p>
-<h2 id="the-physics">The physics</h2>
-<p>Each SRAM cell is a cross-coupled inverter pair forming a bi-stable latch. When power is first applied, the circuit settles into either <code>0</code> or <code>1</code> depending on atomic-level manufacturing variations — random dopant fluctuations, oxide thickness differences, and threshold voltage mismatches between the two transistors. These variations are physically unpredictable, stable per-cell, uncorrelated between chips, and fresh each power cycle.</p>
-<p>Holcomb, Burleson, and Fu first characterized this at UMass in 2009. I'm exploiting their exact finding on a breadboard.</p>
-<h2 id="the-circuit">The circuit</h2>
-<p>Up to 8 PCF8570P I2C SRAM chips (256 bytes each, DIP-8, ~$2) share a common Vcc rail switched by a single 2N7000 N-channel MOSFET on Arduino D2. A 10kΩ pull-down holds the gate low during boot so the SRAMs stay off while the Arduino's GPIOs are tri-state. Two more 10kΩ resistors pull up the I2C bus, and each chip gets a 100nF decoupling cap.</p>
-<p>The sequence: power all chips off → wait 20ms (+ <code>micros()</code> jitter for extra entropy) → power on → wait 10ms → read each chip sequentially over I2C at 400kHz → repeat. The jitter in the timing itself adds entropy since <code>micros()</code> depends on unpredictable interrupt timing.</p>
-<h2 id="the-sketch">The sketch</h2>
-<p>The loop reads 256 bytes raw from each chip, applies debiasing, runs a health check, and streams the result over Serial at 115200 baud.</p>
-<p>Three debiasing methods are configurable at compile time:</p>
-<ul>
-<li><strong>XOR-fold</strong> (default) — XOR each byte with the previous. No throughput loss, removes additive bias.</li>
-<li><strong>Von Neumann</strong> — pair consecutive bits: <code>01</code> → <code>1</code>, <code>10</code> → <code>0</code>, discard <code>00</code>/<code>11</code>. Eliminates per-bit bias but ~25% throughput.</li>
-<li><strong>SHA-256</strong> — cryptographic whitening via <code>avr-crypto-lib</code>. Full NIST SP 800-90B conditioning.</li>
-</ul>
-<p>The health check is a repetition count test: if the same byte appears more than 32 times consecutively, the cycle is discarded. This catches stuck bits, dead chips, or wiring faults.</p>
-<p>Raw SRAM power-up data has a per-cell zeros rate of 45–55% and min-entropy of ~2–4 bits per byte — definitely needs conditioning before cryptographic use.</p>
-<h2 id="performance">Performance</h2>
-<p>With 3 chips and XOR-fold: ~5.9 KB/s. With 8 chips and SHA-256: ~900 B/s conditioned. Throughput is limited more by I2C read speed than by SRAM settle time.</p>
-<h2 id="what-its-good-for">What it's good for</h2>
-<p>This isn't practical. A dedicated hardware RNG chip costs $5 and outperforms it by orders of magnitude. But it's a fascinating way to understand entropy sources, SRAM physics, and what "true random" actually means at the physical level. And there's something satisfying about watching real random bytes stream across a serial terminal, generated by quantum-scale manufacturing variations in $2 chips.</p>
+  <p>A true hardware random number generator using SRAM PUF — exploiting random power-up states of cheap I2C memory chips.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>This site is built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator I wrote in Python.</p>
-<p>It takes Markdown content and Jinja2 templates and produces flat HTML files. Routes are declared with a decorator, much like Flask:</p>
-<pre><code class="language-python">@app.route('/blog')
-def blog_index(page):
-    page.data.update({
-        'title': &quot;Blog&quot;,
-        'posts': posts,
-    })
-</code></pre>
-<p>Noise handles the rest — finding the template, rendering the page, and writing the output file.</p>
-<p>I recently modernized it from the original Python 2 to 3.8+. Key changes:</p>
-<ul>
-<li>Replaced insecure <code>__import__()</code> with <code>importlib.util</code></li>
-<li>Fixed global Markdown state that leaked between renders</li>
-<li>Added a proper test suite (33 tests)</li>
-<li>Modern packaging with <code>pyproject.toml</code></li>
-<li>Built-in dev server with live reload via SSE</li>
-</ul>
-<p>The source is at <a href="https://github.com/ryonsherman/noise">ryonsherman/noise</a>.</p>
+  <p>Noise is a minimal static site generator written in Python. This post introduces the project and its features.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>Encode arbitrary binary data into QR code videos for YouTube storage, and decode it back from a downloaded video. Yes, it works.</p>
-<p><a href="https://github.com/ryonsherman/qrvid"><img src="https://github.com/ryonsherman/qrvid/raw/main/screenshots/preview.gif" width="768" alt="QR code video preview"></a></p>
-<p><a href="https://github.com/ryonsherman/qrvid">QRVid on GitHub</a></p>
-<h2 id="how-it-works">How it works</h2>
-<p>Input data is split into 300-byte chunks with a 20-byte header (magic, format version, flags, total chunks, chunk index, chunk length, total data length, CRC32). Each chunk is rendered as a QR code with error correction H (30%). QRs are laid out on a 1920×1080 H.264 video frame in a configurable grid — default 6×5 = 30 QRs per frame. Each layout is held for N frames (default 3 at 30 fps = 0.1s), then the next layout plays. YouTube's 33-second minimum duration is enforced with trailing black frames.</p>
-<h2 id="reading-from-a-video">Reading from a video</h2>
-<p>The decoder scans every frame in parallel using a process pool. Each frame is checked against a black threshold (skipping padding frames), then QR codes are detected with pyzbar (falling back to OpenCV's built-in detector). Duplicate payloads are discarded by hash. Chunks are re-ordered by index, concatenated, and CRC32 is verified.</p>
-<p>It handles YouTube download natively — yt-dlp with Firefox cookies and bun JS runtime for YouTube's bot challenge.</p>
-<h2 id="optional-features">Optional features</h2>
-<p><strong>Compression</strong> — gzip level 9 before encoding. <strong>Encryption</strong> — AES-256-GCM with PBKDF2 key derivation (600k iterations). <strong>Recovery</strong> — XOR parity chunks in configurable group sizes; if chunks are lost to YouTube re-encoding artifacts, missing data can be repaired. <strong>Integrity check</strong> — <code>--verify</code> decodes the output right after encoding to confirm everything survives.</p>
-<h2 id="capacity">Capacity</h2>
-<p>With defaults (6×5 = 30 QPF, 3 hold at 30 fps, 300 bytes/chunk):</p>
-<table>
-<thead>
-<tr>
-<th>Duration</th>
-<th>QRs</th>
-<th>Raw data</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>4 min</td>
-<td>77,400</td>
-<td>~22 MB</td>
-</tr>
-<tr>
-<td>15 min</td>
-<td>324,000</td>
-<td>~82 MB</td>
-</tr>
-<tr>
-<td>12 hours</td>
-<td>15M+</td>
-<td>~3.9 GB</td>
-</tr>
-</tbody>
-</table>
-<p>Tune <code>--cols</code>, <code>--rows</code>, <code>--hold</code>, and <code>--box-size</code> to trade density for readability. The <code>--max-duration</code> flag splits across multiple files for YouTube's upload limits.</p>
-<h2 id="usage">Usage</h2>
-<pre><code>qrvid enc myfile.bin -o myfile.mp4                          # basic
-qrvid enc myfile.bin -o myfile.mp4 --compress --password &quot;hunter2&quot;   # compress + encrypt
-qrvid enc myfile.bin -o myfile.mp4 --recovery 1             # loss protection
-qrvid dec myfile.mp4 -o restored.bin                        # decode local
-qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode from YouTube
-</code></pre>
-<p>Parallel frame generation (process pool) makes encoding practical — for a 1MB test file, a 6×5 layout encodes in seconds and all layouts pass verify.</p>
+  <p>Encode arbitrary binary data into QR code videos for YouTube storage and decode it back. Yes, it works.</p>
 </div>
 
 <div class="blog-post">
   <h3><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></h3>
   <span class="post-date">2026-06-12</span>
-  <p>I built a 4-player castle battle game with bouncing projectiles, power-ups, and online multiplayer.</p>
-<p><img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="768" alt="Rebound menu"></p>
-<h2 id="the-game">The game</h2>
-<p>Rebound is a real-time arena game where four castles occupy the corners of the arena, each with a rotating cannon that fires ricocheting projectiles. The goal is to destroy every brick in your opponents' castles.</p>
-<p>The mechanics are simple to pick up:</p>
-<ul>
-<li><strong>Mouse</strong> to aim your cannon</li>
-<li><strong>Click</strong> to fire — projectiles bounce off walls, obstacles, and each other</li>
-<li><strong>Space</strong> to activate a shield that deflects incoming shots</li>
-<li>Collect <strong>power-ups</strong> that spawn periodically for offensive and defensive abilities</li>
-</ul>
-<p>As players are eliminated, the center obstacle spins faster, dynamic obstacles fill the dead zones, and the surviving players get faster projectiles with more bounces. The game escalates until one player remains.</p>
-<h2 id="technical-stack">Technical stack</h2>
-<p>Built from scratch in Python with <strong>Pygame</strong> for rendering and <strong>NATS</strong> for multiplayer. No game engine — the physics, collision detection, AI pathfinding, and networking are all custom.</p>
-<p>The AI uses ray casting to find bounce points off walls and obstacles, with three difficulty settings that tune fire rate, projectile speed, shield timing, and power-up spawn frequency.</p>
-<p>Multiplayer uses a server-authoritative architecture: the server runs the physics, clients send only raw inputs. NATS handles message routing with automatic matchmaking.</p>
-<h2 id="power-ups">Power-ups</h2>
-<p>There are 12 power-ups in three categories — offensive abilities like piercing and spread shot, defensive abilities like shield pulse and healing shield, and instant pickups like repair kits and cannon boost. Each change adds a layer of tactical depth to the chaos of bouncing projectiles.</p>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/pygame-rebound/">ryonsherman/pygame-rebound</a>.</p>
+  <p>A 4-player castle battle game with bouncing projectiles, power-ups, AI, and online multiplayer.</p>
 </div>
 
 

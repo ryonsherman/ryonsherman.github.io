@@ -1,4 +1,5 @@
 title: cryptboard — Public Encrypted Dead Drops Over GitHub
+description: Public encrypted dead drops over GitHub — anyone can see the files, but only the intended recipient can read them.
 date: 2026-06-12
 ---
 
