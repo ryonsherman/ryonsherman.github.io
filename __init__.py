@@ -15,7 +15,7 @@ def index(page):
     page.data.update({
         'title': "secretco.de.com",
         'body': "Hello World",
-        'recent_posts': posts[:5],
+        'recent_posts': posts[:25],
     })
 
 @app.route('/blog')
@@ -23,7 +23,7 @@ def blog_index(page):
     page.data.update({
         'title': "Blog - secretco.de.com",
         'posts': posts,
-        'recent_posts': posts[:5],
+        'recent_posts': posts[:25],
     })
 
 @app.route('/blog/feed.atom')
@@ -45,7 +45,7 @@ for post in posts:
             page.data.update({
                 'title': p['title'] + ' - secretco.de.com',
                 'post': p,
-                'recent_posts': posts[:5],
+                'recent_posts': posts[:25],
             })
         return handler
     app.routes['/blog/' + post['slug'] + '.html'] = make_handler(post)
