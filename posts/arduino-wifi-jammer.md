@@ -4,7 +4,7 @@ date: 2026-06-12
 
 A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.
 
-[![12-unit jamming array on channel 1 in controlled lab environment](https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png)](https://github.com/ryonsherman/arduino-wifi-jammer/)
+<a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" width="768" alt="12-unit jamming array on channel 1"></a>
 
 ## Architecture
 
