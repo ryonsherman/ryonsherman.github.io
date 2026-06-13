@@ -24,6 +24,14 @@ def blog_index(page):
         'recent_posts': posts[:5],
     })
 
+@app.route('/blog/feed.atom')
+def blog_feed(page):
+    page.template = str(page.app.path.template('atom.xml'))
+    page.data.update({
+        'posts': posts,
+        'updated': posts[0]['date'] + 'T00:00:00Z' if posts else '',
+    })
+
 for post in posts:
     def make_handler(p):
         def handler(page):

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Ryon Sherman</title>
+  <link href="https://ryonsherman.github.io/" rel="alternate"/>
+  <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
+  <id>https://ryonsherman.github.io/</id>
+  <updated>{{ updated }}</updated>
+  {% for post in posts %}
+  <entry>
+    <title>{{ post.title }}</title>
+    <link href="https://ryonsherman.github.io/blog/{{ post.slug }}.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/{{ post.slug }}.html</id>
+    <published>{{ post.date }}T00:00:00Z</published>
+    <updated>{{ post.date }}T00:00:00Z</updated>
+    <content type="html"><![CDATA[{{ post.body }}]]></content>
+  </entry>
+  {% endfor %}
+</feed>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Ryon Sherman</title>
+  <link href="https://ryonsherman.github.io/" rel="alternate"/>
+  <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
+  <id>https://ryonsherman.github.io/</id>
+  <updated>2026-06-12T00:00:00Z</updated>
+  
+  <entry>
+    <title>Hello World</title>
+    <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/hello-world.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <content type="html"><![CDATA[Welcome to my blog! This is the first post.
+
+Built with [Noise](https://github.com/ryonsherman/noise), a minimal static site generator.]]></content>
+  </entry>
+  
+  <entry>
+    <title>Modernizing Noise</title>
+    <link href="https://ryonsherman.github.io/blog/modernizing-noise.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/modernizing-noise.html</id>
+    <published>2026-06-11T00:00:00Z</published>
+    <updated>2026-06-11T00:00:00Z</updated>
+    <content type="html"><![CDATA[I recently updated my old static site generator, Noise, from Python 2 to Python 3.
+
+Key changes:
+- Ported to Python 3.8+
+- Replaced insecure import with `importlib.util`
+- Added proper test suite
+- Modern packaging with `pyproject.toml`]]></content>
+  </entry>
+  
+</feed>
