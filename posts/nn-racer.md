@@ -5,6 +5,8 @@ date: 2026-06-12
 
 A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.
 
+<a href="https://github.com/ryonsherman/nn-racer"><img src="/img/nn-racer.png" width="768" alt="NN Racer with evolved cars driving on a generated track"></a>
+
 ## The core loop
 
 A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.
