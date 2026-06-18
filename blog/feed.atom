@@ -10,6 +10,47 @@
   </author>
   
   <entry>
+    <title>NN Racer — Teaching a Neural Network to Drive with Evolution</title>
+    <link href="https://ryonsherman.github.io/blog/nn-racer.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/nn-racer.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.</p>
+<h2>The core loop</h2>
+<p>A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.</p>
+<h2>Ray sensors</h2>
+<p>Five sensors at -90°, -45°, 0°, +45°, +90° relative to the car's heading march outward in 3-pixel steps up to 200px range, checking if each point is on the track. Sensor readings are normalized to 0-1 and fed to the neural network. A coarse spatial grid makes these lookups O(1) instead of iterating through thousands of centerline points.</p>
+<h2>Car physics</h2>
+<p>Position/velocity/heading with forward acceleration and braking (no reversing). Speed-dependent steering — less effective at high speed. Lateral grip prevents sliding. Drag tuned so equilibrium equals top speed. The car is 23×9 pixels (~4.5m × 1.8m).</p>
+<h2>Genetic algorithm</h2>
+<p>Standard tournament-selection GA with a population of 50-60. Top 2 brains are kept as elites (unchanged). Tournament size 3 for parent selection. Weight-averaging crossover with random blending factor 0.3-0.7. Gaussian mutation with configurable standard deviation. Multiprocessing evaluation across all CPU cores using the dummy SDL video driver for headless rendering.</p>
+<h2>Procedural track generation</h2>
+<p>Tracks use Gustavo Maciel's algorithm: random points → convex hull (Andrew's Monotone Chain) → add displaced midpoints on each edge → enforce minimum 100° angle between adjacent control points → interpolate with centripetal Catmull-Rom splines (alpha=0.5) → reject tracks with self-intersecting boundaries.</p>
+<p>The fundamental insight: offsetting a centerline to create boundary polygons always risks self-intersection on tight curves. The fix is to stop using polygon boundaries for collision and instead use point-to-centerline distance. This is guaranteed correct for any centerline shape.</p>
+<h2>The GA convergence problem</h2>
+<p>The GA kept plateauing at 2-3 checkpoints. Weight-averaging crossover converges toward mediocrity by blending all individuals toward the mean. Combined with a flat fitness landscape (no gradient until the first checkpoint was crossed), the GA was stuck.</p>
+<p>The fix was replacing checkpoint line-crossing with angular progress tracking around the track centroid. Every pixel of forward movement increases fitness. This smooth, continuous signal was the key breakthrough that made learning possible.</p>
+<h2>Brain transfer learning</h2>
+<p>Brains trained on one track transfer surprisingly well to others. An oval-trained brain can navigate raceway, hairpin, and technical tracks after just a few generations of fine-tuning. This enabled chain training: train on oval → seed next track → fine-tune → save champion → repeat through all 30 curated seeds. Every single seed reached 1+ laps, most within 1-5 generations.</p>
+<p>The final experiment: train on randomly generated tracks, chaining the champion forward and discarding tracks that can't be solved within 20 generations. Over 400 random tracks, the brain learned a remarkably general driving policy — it could navigate almost any valid track the generator produced, often completing 5-8 laps in the allotted 5000 steps.</p>
+<h2>74 parameters</h2>
+<p>The entire network has only 74 parameters (6×8 + 8 + 8×2 + 2 = 74). That's fewer weights than a single linear layer in a modern neural network. Yet with a well-designed fitness function and enough generations, this tiny network learns to drive complex tracks at speed, handle tight hairpins, and generalize to tracks it's never seen before.</p>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/nn-racer">ryonsherman/nn-racer</a>.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Fitness function design is everything</strong> — A flat fitness landscape kills GAs. Angular progress (continuous, smooth) vs. checkpoint crossing (binary, sparse) was the difference between stalling at 2 checkpoints and completing 8 laps.</li>
+<li><strong>Weight-averaging crossover converges to mediocrity</strong> — It works for simple problems but tends toward the mean. Uniform crossover or approaches like NEAT or CMA-ES would maintain more diversity.</li>
+<li><strong>Distance-based collision is more robust than polygon offset</strong> — Offset boundary polygons self-intersect on tight curves. Point-to-centerline distance is simpler and always correct.</li>
+<li><strong>Centripetal Catmull-Rom prevents cusps</strong> — The centripetal parameterization (alpha=0.5) prevents self-intersections where uniform Catmull-Rom fails, making it ideal for generating track centerlines.</li>
+<li><strong>Brain transfer is surprisingly powerful</strong> — A general driving policy emerges from training on diverse tracks. Fine-tuning to a new track takes 1-5 generations vs. 20-50 from scratch.</li>
+<li><strong>74 parameters is enough</strong> — A tiny feedforward network with fewer weights than a single modern linear layer can learn complex driving behavior given the right training signal and enough iterations.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
     <title>Voxscript — A CLI Script-to-Speech Tool with Piper TTS</title>
     <link href="https://ryonsherman.github.io/blog/voxscript.html" rel="alternate"/>
     <id>https://ryonsherman.github.io/blog/voxscript.html</id>
@@ -39,57 +80,6 @@
 <li><strong>Voice mapping makes scripts flexible</strong> — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.</li>
 <li><strong>CLI-first design works</strong> — A simple <code>SPEAKER: dialog</code> format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.</li>
 </ul></content>
-  </entry>
-  
-  <entry>
-    <title>uTorrent Bridge — A Compatibility Layer Nobody Asked For</title>
-    <link href="https://ryonsherman.github.io/blog/utorrent-bridge.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/utorrent-bridge.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>Back in the early 2010s, uTorrent had a Web API and a few mobile apps — uRemote, Torrent-fu — that let you manage your torrents from your phone. The catch: they only worked with uTorrent. If you ran rTorrent on a headless server (as any self-respecting Linux user did), you were out of luck.</p>
-<p>So I built a bridge.</p>
-<p>uTorrent Bridge is a compatibility layer that emulates the uTorrent Web API. You point it at your actual torrent backend (rTorrent, Transmission, whatever) and it speaks uTorrent's API to the outside world. Mobile apps connect to the bridge, the bridge translates commands to the real backend, everyone goes home happy.</p>
-<h2>Architecture</h2>
-<p>A plugin system with two sides: a <strong>client</strong> module talks to the real torrent backend (rTorrent via XML-RPC, Transmission via its RPC, etc.), and a <strong>server</strong> module presents the uTorrent Web API to clients. The bridge instantiates both and connects them together.</p>
-<pre><code class="language-python">module = __import__('modules.%s' % kwargs['client']['module'])
-client = getattr(module, 'Client')
-self.client = client(**kwargs['client'])
-
-module = __import__('modules.%s' % kwargs['server']['module'])
-server = getattr(module, 'Server')
-self.server = server(**kwargs['server'])
-</code></pre>
-<p>The config was simple — pick your backend, pick your API flavor, set the ports:</p>
-<pre><code>[client]
-module = rtorrent
-address = 127.0.0.1
-port = 5000
-auth = xmlrpc
-
-[server]
-module = utorrent
-address = 127.0.0.1
-port = 8080
-auth = basic
-</code></pre>
-<h2>What Got Built</h2>
-<p>Enough to prove the concept. The module system worked — you could plug in different backends by dropping a Python file in <code>modules/</code>. The base classes in <code>lib/</code> defined the contract, and each module implemented the translation layer.</p>
-<p>Planned backends included rTorrent, Transmission, SABnzbd, and Hellanzb. In practice, only the rTorrent module got any real work done — and even that was mostly stubs. The project was abandoned long before it was useful.</p>
-<h2>Why It Didn't Go Further</h2>
-<p>The uTorrent Web API was undocumented, versioned by whim, and changed between releases. Keeping up would have been a full-time cat-and-mouse game. Meanwhile, better solutions already existed — rTorrent had its own mobile apps, Transmission had remote GUIs, and the whole "bridge" approach was inherently fragile.</p>
-<p>It was the kind of project that makes total sense at 2 AM and much less sense in the morning. The kind where you solve an interesting technical problem (API translation! Plugin architecture!) without stopping to ask whether the problem should exist at all.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Protocol translation is harder than it looks</strong> — every API has edge cases, and mapping one to another is never 1:1</li>
-<li><strong>Plugin architectures are fun to build</strong> — there's something satisfying about designing an interface that multiple backends can implement</li>
-<li><strong>Not every project needs to ship to be worth it</strong> — this one taught me more about HTTP APIs, RPC protocols, and system design than any tutorial could have</li>
-<li><strong>Sometimes the right call is to walk away</strong> — recognizing when a project has served its purpose (as a learning experience) and doesn't need to be finished is a skill in itself</li>
-</ul>
-<p>The code still sits in a Git repo, untouched since 2014. Python 2, <code>ConfigParser</code>, <code>__import__</code> string-based module loading — a time capsule of an era when these seemed like reasonable choices. I keep it around as a reminder that abandoned projects aren't failures. They're tuition.</p></content>
   </entry>
   
   <entry>
@@ -191,47 +181,6 @@ qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode f
 <li><strong>YouTube has weird constraints</strong> — 33-second minimum video length, unverified accounts limited to 15 minutes, re-encoding that breaks data. Designing around platform quirks is half the work.</li>
 <li><strong>Checkpoint resuming matters</strong> — Scanning a 12-hour video from scratch is painful. Saving decoded chunks by frame index means you can resume an interrupted decode in seconds instead of hours.</li>
 <li><strong>QR version auto-selection is neat</strong> — I didn't have to pick a QR size. The library chooses the smallest version that fits the data, and each chunk gets its own optimal version. Simple, correct, done.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>NN Racer — Teaching a Neural Network to Drive with Evolution</title>
-    <link href="https://ryonsherman.github.io/blog/nn-racer.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/nn-racer.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.</p>
-<h2>The core loop</h2>
-<p>A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.</p>
-<h2>Ray sensors</h2>
-<p>Five sensors at -90°, -45°, 0°, +45°, +90° relative to the car's heading march outward in 3-pixel steps up to 200px range, checking if each point is on the track. Sensor readings are normalized to 0-1 and fed to the neural network. A coarse spatial grid makes these lookups O(1) instead of iterating through thousands of centerline points.</p>
-<h2>Car physics</h2>
-<p>Position/velocity/heading with forward acceleration and braking (no reversing). Speed-dependent steering — less effective at high speed. Lateral grip prevents sliding. Drag tuned so equilibrium equals top speed. The car is 23×9 pixels (~4.5m × 1.8m).</p>
-<h2>Genetic algorithm</h2>
-<p>Standard tournament-selection GA with a population of 50-60. Top 2 brains are kept as elites (unchanged). Tournament size 3 for parent selection. Weight-averaging crossover with random blending factor 0.3-0.7. Gaussian mutation with configurable standard deviation. Multiprocessing evaluation across all CPU cores using the dummy SDL video driver for headless rendering.</p>
-<h2>Procedural track generation</h2>
-<p>Tracks use Gustavo Maciel's algorithm: random points → convex hull (Andrew's Monotone Chain) → add displaced midpoints on each edge → enforce minimum 100° angle between adjacent control points → interpolate with centripetal Catmull-Rom splines (alpha=0.5) → reject tracks with self-intersecting boundaries.</p>
-<p>The fundamental insight: offsetting a centerline to create boundary polygons always risks self-intersection on tight curves. The fix is to stop using polygon boundaries for collision and instead use point-to-centerline distance. This is guaranteed correct for any centerline shape.</p>
-<h2>The GA convergence problem</h2>
-<p>The GA kept plateauing at 2-3 checkpoints. Weight-averaging crossover converges toward mediocrity by blending all individuals toward the mean. Combined with a flat fitness landscape (no gradient until the first checkpoint was crossed), the GA was stuck.</p>
-<p>The fix was replacing checkpoint line-crossing with angular progress tracking around the track centroid. Every pixel of forward movement increases fitness. This smooth, continuous signal was the key breakthrough that made learning possible.</p>
-<h2>Brain transfer learning</h2>
-<p>Brains trained on one track transfer surprisingly well to others. An oval-trained brain can navigate raceway, hairpin, and technical tracks after just a few generations of fine-tuning. This enabled chain training: train on oval → seed next track → fine-tune → save champion → repeat through all 30 curated seeds. Every single seed reached 1+ laps, most within 1-5 generations.</p>
-<p>The final experiment: train on randomly generated tracks, chaining the champion forward and discarding tracks that can't be solved within 20 generations. Over 400 random tracks, the brain learned a remarkably general driving policy — it could navigate almost any valid track the generator produced, often completing 5-8 laps in the allotted 5000 steps.</p>
-<h2>74 parameters</h2>
-<p>The entire network has only 74 parameters (6×8 + 8 + 8×2 + 2 = 74). That's fewer weights than a single linear layer in a modern neural network. Yet with a well-designed fitness function and enough generations, this tiny network learns to drive complex tracks at speed, handle tight hairpins, and generalize to tracks it's never seen before.</p>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/nn-racer">ryonsherman/nn-racer</a>.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Fitness function design is everything</strong> — A flat fitness landscape kills GAs. Angular progress (continuous, smooth) vs. checkpoint crossing (binary, sparse) was the difference between stalling at 2 checkpoints and completing 8 laps.</li>
-<li><strong>Weight-averaging crossover converges to mediocrity</strong> — It works for simple problems but tends toward the mean. Uniform crossover or approaches like NEAT or CMA-ES would maintain more diversity.</li>
-<li><strong>Distance-based collision is more robust than polygon offset</strong> — Offset boundary polygons self-intersect on tight curves. Point-to-centerline distance is simpler and always correct.</li>
-<li><strong>Centripetal Catmull-Rom prevents cusps</strong> — The centripetal parameterization (alpha=0.5) prevents self-intersections where uniform Catmull-Rom fails, making it ideal for generating track centerlines.</li>
-<li><strong>Brain transfer is surprisingly powerful</strong> — A general driving policy emerges from training on diverse tracks. Fine-tuning to a new track takes 1-5 generations vs. 20-50 from scratch.</li>
-<li><strong>74 parameters is enough</strong> — A tiny feedforward network with fewer weights than a single modern linear layer can learn complex driving behavior given the right training signal and enough iterations.</li>
 </ul></content>
   </entry>
   
@@ -362,48 +311,6 @@ def blog_index(page):
 <li><strong>Watchdog timer deep sleep</strong> — The ATmega328p's watchdog timer wakes from deep sleep at configurable intervals without an external RTC. The GPS itself provides the time — no extra chip needed.</li>
 <li><strong>NMEA parsing from scratch</strong> — GPS sentences like <code>$GPGGA</code> are just comma-separated text. Parsing them character-by-character over SoftwareSerial teaches you exactly what information a GPS fix contains and why.</li>
 </ul></content>
-  </entry>
-  
-  <entry>
-    <title>FogMUD — Building a Modern Telnet MUD From Scratch</title>
-    <link href="https://ryonsherman.github.io/blog/fogmud.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/fogmud.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>FogMUD is a Multi-User Dungeon (MUD) — a text-based multiplayer roleplaying game — built entirely from scratch in Python using asyncio. No MUD libraries, no game engines. Just raw TCP sockets, telnet protocol negotiation, and a lot of JSON.</p>
-<p>Players connect via telnet, choose from three factions, 18 races, and 4 classes, and explore the frontier town of Drel — a world layered between reality and a mysterious force called the Veil. Over 10,000 lines of Python across ~50 source files, zero runtime dependencies beyond the standard library.</p>
-<h2>Origin</h2>
-<p>The project started as a Python 2 MUD in 2014, using asyncore (the long-deprecated async library). That codebase sat in a Git repository for nearly a decade. In 2025, it was resurrected with a complete rewrite to Python 3.10+ asyncio — preserving the JSON-first architecture and telnet protocol handling while completely rebuilding combat, classes, factions, NPCs, and the world itself.</p>
-<p>This rewrite is still ongoing. The project is very much a work in progress, and probably always will be — that's the nature of building a living world.</p>
-<h2>How It Works</h2>
-<p><strong>Telnet protocol</strong> — Raw RFC 854 telnet with IAC negotiation for echo control. Character-by-character input. Packet-level debugging to get it right. Modern telnet clients are forgiving, but the protocol is from 1983 and it shows.</p>
-<p><strong>asyncio</strong> — Single-process, event-driven concurrency. No threads, no GIL issues, no database. Player sessions are asyncio tasks, the game heartbeat runs on a loop, and everything is non-blocking.</p>
-<p><strong>JSON on disk</strong> — Every piece of game data lives in JSON files. Easy to debug (just open the file), but concurrent access requires asyncio.Lock per file plus atomic writes (write to temp, then rename). The DataManager creates timestamped backups before every save, rotating the last 10.</p>
-<h2>Key Systems</h2>
-<p><strong>Combat</strong> — Stat-based with multi-defender support. Players can fight multiple NPCs simultaneously. Three NPC aggression tiers: passive, aggressive (attacks on sight with a Charisma saving throw), and protective (defends specific mobs). NPCs that lose their target will <em>hunt the player through rooms</em> — tracking their path every heartbeat tick until they catch up.</p>
-<p><strong>The pursuit system</strong> — When combat breaks due to a player leaving the room, each engaged NPC becomes a "hunter" that tracks the player's path. Every 2-second heartbeat, each hunter advances one room. When they catch up, combat resumes with a dramatic "bursts into the room" message. There's even a <code>hunters</code> command to see what's chasing you.</p>
-<p><strong>Factions &amp; races</strong> — Three factions (Iron Accord, Verdant Circle, Aether Pact) each with 6 unique races drawn from classic fantasy. Races have stat modifiers that complement different playstyles.</p>
-<p><strong>Class halls</strong> — You don't pick your class at character creation. You start as a blank slate and must find the appropriate class hall in the world — then type <code>become fighter</code>. Subclasses unlock at level 20, requiring a return visit. This makes class choice feel meaningful instead of transactional.</p>
-<p><strong>Progression</strong> — A shared XP pool fuels both leveling and stat improvement. A stat gate prevents cheese: <code>sum(all_stats) &gt;= 60 + level * 2</code> before you can advance. You can't outrun your stats.</p>
-<p><strong>Trigger engine</strong> — Room triggers execute Python logic from JSON data, but through AST validation — only safe operations (comparisons, attribute access, boolean logic) are allowed. Unsafe code is rejected before execution.</p>
-<p><strong>Game time</strong> — A full calendar with seasons, time of day, and weather that's local to regions and affects gameplay. Seasonal recovery modifiers, dawn through midnight, spring through winter.</p>
-<h2>What's Still to Come</h2>
-<p>This is the part I'm most excited about. The foundations are solid, but the world is still being built:</p>
-<ul>
-<li>Skill system — 15 skills, 3 per class, with subclass-specific training formulas</li>
-<li>Party system with XP sharing and level range limits</li>
-<li>Quest system driven by the trigger engine</li>
-<li>Subclass abilities — the actual unique powers per archetype</li>
-<li>Porting 58+ rooms from the original codebase into Drel</li>
-<li>More NPC types, items, equipment, and crafting</li>
-<li>Building out Drel itself — the frontier town where players arrive, with NPCs that have schedules, shops that stock inventory, and secrets waiting to be found</li>
-</ul>
-<h2>A Living Project</h2>
-<p>FogMUD has been in development on and off since 2014. It sat dormant for years, then came back to life as a complete rewrite. It'll probably go through another rewrite someday — that's how these things go. The beauty of building a MUD from scratch is that there's no finish line. There's always another system to build, another room to describe, another bug to fix. The world grows as you do.</p>
-<p>For now, it's telnet, it's Python, it's JSON files, and it's very much a work in progress. And I wouldn't have it any other way.</p></content>
   </entry>
   
   <entry>
@@ -606,6 +513,99 @@ dev.systems.append(sys)
 <li><strong>Hardware kill switches</strong> — A three-position toggle switch is the most reliable "off" mechanism. No software crashes, no firmware bugs, no serial connection required. Just throw the switch.</li>
 <li><strong>Adaptive sensing</strong> — Using one NRF24 in RX mode as a spectrum analyzer while the rest transmit is a neat trick. The master sees what's happening on every channel and can target the busiest ones without any external hardware.</li>
 </ul></content>
+  </entry>
+  
+  <entry>
+    <title>uTorrent Bridge — A Compatibility Layer Nobody Asked For</title>
+    <link href="https://ryonsherman.github.io/blog/utorrent-bridge.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/utorrent-bridge.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Back in the early 2010s, uTorrent had a Web API and a few mobile apps — uRemote, Torrent-fu — that let you manage your torrents from your phone. The catch: they only worked with uTorrent. If you ran rTorrent on a headless server (as any self-respecting Linux user did), you were out of luck.</p>
+<p>So I built a bridge.</p>
+<p>uTorrent Bridge is a compatibility layer that emulates the uTorrent Web API. You point it at your actual torrent backend (rTorrent, Transmission, whatever) and it speaks uTorrent's API to the outside world. Mobile apps connect to the bridge, the bridge translates commands to the real backend, everyone goes home happy.</p>
+<h2>Architecture</h2>
+<p>A plugin system with two sides: a <strong>client</strong> module talks to the real torrent backend (rTorrent via XML-RPC, Transmission via its RPC, etc.), and a <strong>server</strong> module presents the uTorrent Web API to clients. The bridge instantiates both and connects them together.</p>
+<pre><code class="language-python">module = __import__('modules.%s' % kwargs['client']['module'])
+client = getattr(module, 'Client')
+self.client = client(**kwargs['client'])
+
+module = __import__('modules.%s' % kwargs['server']['module'])
+server = getattr(module, 'Server')
+self.server = server(**kwargs['server'])
+</code></pre>
+<p>The config was simple — pick your backend, pick your API flavor, set the ports:</p>
+<pre><code>[client]
+module = rtorrent
+address = 127.0.0.1
+port = 5000
+auth = xmlrpc
+
+[server]
+module = utorrent
+address = 127.0.0.1
+port = 8080
+auth = basic
+</code></pre>
+<h2>What Got Built</h2>
+<p>Enough to prove the concept. The module system worked — you could plug in different backends by dropping a Python file in <code>modules/</code>. The base classes in <code>lib/</code> defined the contract, and each module implemented the translation layer.</p>
+<p>Planned backends included rTorrent, Transmission, SABnzbd, and Hellanzb. In practice, only the rTorrent module got any real work done — and even that was mostly stubs. The project was abandoned long before it was useful.</p>
+<h2>Why It Didn't Go Further</h2>
+<p>The uTorrent Web API was undocumented, versioned by whim, and changed between releases. Keeping up would have been a full-time cat-and-mouse game. Meanwhile, better solutions already existed — rTorrent had its own mobile apps, Transmission had remote GUIs, and the whole "bridge" approach was inherently fragile.</p>
+<p>It was the kind of project that makes total sense at 2 AM and much less sense in the morning. The kind where you solve an interesting technical problem (API translation! Plugin architecture!) without stopping to ask whether the problem should exist at all.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Protocol translation is harder than it looks</strong> — every API has edge cases, and mapping one to another is never 1:1</li>
+<li><strong>Plugin architectures are fun to build</strong> — there's something satisfying about designing an interface that multiple backends can implement</li>
+<li><strong>Not every project needs to ship to be worth it</strong> — this one taught me more about HTTP APIs, RPC protocols, and system design than any tutorial could have</li>
+<li><strong>Sometimes the right call is to walk away</strong> — recognizing when a project has served its purpose (as a learning experience) and doesn't need to be finished is a skill in itself</li>
+</ul>
+<p>The code still sits in a Git repo, untouched since 2014. Python 2, <code>ConfigParser</code>, <code>__import__</code> string-based module loading — a time capsule of an era when these seemed like reasonable choices. I keep it around as a reminder that abandoned projects aren't failures. They're tuition.</p></content>
+  </entry>
+  
+  <entry>
+    <title>FogMUD — Building a Modern Telnet MUD From Scratch</title>
+    <link href="https://ryonsherman.github.io/blog/fogmud.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/fogmud.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>FogMUD is a Multi-User Dungeon (MUD) — a text-based multiplayer roleplaying game — built entirely from scratch in Python using asyncio. No MUD libraries, no game engines. Just raw TCP sockets, telnet protocol negotiation, and a lot of JSON.</p>
+<p>Players connect via telnet, choose from three factions, 18 races, and 4 classes, and explore the frontier town of Drel — a world layered between reality and a mysterious force called the Veil. Over 10,000 lines of Python across ~50 source files, zero runtime dependencies beyond the standard library.</p>
+<h2>Origin</h2>
+<p>The project started as a Python 2 MUD in 2014, using asyncore (the long-deprecated async library). That codebase sat in a Git repository for nearly a decade. In 2025, it was resurrected with a complete rewrite to Python 3.10+ asyncio — preserving the JSON-first architecture and telnet protocol handling while completely rebuilding combat, classes, factions, NPCs, and the world itself.</p>
+<p>This rewrite is still ongoing. The project is very much a work in progress, and probably always will be — that's the nature of building a living world.</p>
+<h2>How It Works</h2>
+<p><strong>Telnet protocol</strong> — Raw RFC 854 telnet with IAC negotiation for echo control. Character-by-character input. Packet-level debugging to get it right. Modern telnet clients are forgiving, but the protocol is from 1983 and it shows.</p>
+<p><strong>asyncio</strong> — Single-process, event-driven concurrency. No threads, no GIL issues, no database. Player sessions are asyncio tasks, the game heartbeat runs on a loop, and everything is non-blocking.</p>
+<p><strong>JSON on disk</strong> — Every piece of game data lives in JSON files. Easy to debug (just open the file), but concurrent access requires asyncio.Lock per file plus atomic writes (write to temp, then rename). The DataManager creates timestamped backups before every save, rotating the last 10.</p>
+<h2>Key Systems</h2>
+<p><strong>Combat</strong> — Stat-based with multi-defender support. Players can fight multiple NPCs simultaneously. Three NPC aggression tiers: passive, aggressive (attacks on sight with a Charisma saving throw), and protective (defends specific mobs). NPCs that lose their target will <em>hunt the player through rooms</em> — tracking their path every heartbeat tick until they catch up.</p>
+<p><strong>The pursuit system</strong> — When combat breaks due to a player leaving the room, each engaged NPC becomes a "hunter" that tracks the player's path. Every 2-second heartbeat, each hunter advances one room. When they catch up, combat resumes with a dramatic "bursts into the room" message. There's even a <code>hunters</code> command to see what's chasing you.</p>
+<p><strong>Factions &amp; races</strong> — Three factions (Iron Accord, Verdant Circle, Aether Pact) each with 6 unique races drawn from classic fantasy. Races have stat modifiers that complement different playstyles.</p>
+<p><strong>Class halls</strong> — You don't pick your class at character creation. You start as a blank slate and must find the appropriate class hall in the world — then type <code>become fighter</code>. Subclasses unlock at level 20, requiring a return visit. This makes class choice feel meaningful instead of transactional.</p>
+<p><strong>Progression</strong> — A shared XP pool fuels both leveling and stat improvement. A stat gate prevents cheese: <code>sum(all_stats) &gt;= 60 + level * 2</code> before you can advance. You can't outrun your stats.</p>
+<p><strong>Trigger engine</strong> — Room triggers execute Python logic from JSON data, but through AST validation — only safe operations (comparisons, attribute access, boolean logic) are allowed. Unsafe code is rejected before execution.</p>
+<p><strong>Game time</strong> — A full calendar with seasons, time of day, and weather that's local to regions and affects gameplay. Seasonal recovery modifiers, dawn through midnight, spring through winter.</p>
+<h2>What's Still to Come</h2>
+<p>This is the part I'm most excited about. The foundations are solid, but the world is still being built:</p>
+<ul>
+<li>Skill system — 15 skills, 3 per class, with subclass-specific training formulas</li>
+<li>Party system with XP sharing and level range limits</li>
+<li>Quest system driven by the trigger engine</li>
+<li>Subclass abilities — the actual unique powers per archetype</li>
+<li>Porting 58+ rooms from the original codebase into Drel</li>
+<li>More NPC types, items, equipment, and crafting</li>
+<li>Building out Drel itself — the frontier town where players arrive, with NPCs that have schedules, shops that stock inventory, and secrets waiting to be found</li>
+</ul>
+<h2>A Living Project</h2>
+<p>FogMUD has been in development on and off since 2014. It sat dormant for years, then came back to life as a complete rewrite. It'll probably go through another rewrite someday — that's how these things go. The beauty of building a MUD from scratch is that there's no finish line. There's always another system to build, another room to describe, another bug to fix. The world grows as you do.</p>
+<p>For now, it's telnet, it's Python, it's JSON files, and it's very much a work in progress. And I wouldn't have it any other way.</p></content>
   </entry>
   
   <entry>

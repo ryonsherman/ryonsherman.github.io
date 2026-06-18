@@ -60,9 +60,11 @@ def load_posts(posts_dir):
     for name in sorted(os.listdir(posts_dir)):
         if not name.endswith('.md'):
             continue
-        post = parse_post(os.path.join(posts_dir, name))
+        fpath = os.path.join(posts_dir, name)
+        post = parse_post(fpath)
         post['filename'] = name
+        post['mtime'] = os.path.getmtime(fpath)
         posts.append(post)
 
-    posts.sort(key=lambda p: (p['date'], p['filename']), reverse=True)
+    posts.sort(key=lambda p: (p['date'], p['mtime']), reverse=True)
     return posts
