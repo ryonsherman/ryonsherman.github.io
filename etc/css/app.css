@@ -129,12 +129,8 @@ a {
   #footer .container {
     padding: 20px 10px 5px 10px; }
   #footer .return,
-  #footer .contact,
-  #footer .feeds,
-  #footer .archive,
+  #footer .validation,
   #footer .copyright {
-    display: inline; }
-  #footer .validation {
     display: block; }
   #footer .return {
     font-size: large; }
