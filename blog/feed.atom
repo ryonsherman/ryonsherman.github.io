@@ -4,10 +4,103 @@
   <link href="https://ryonsherman.github.io/" rel="alternate"/>
   <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
   <id>https://ryonsherman.github.io/</id>
-  <updated>2026-06-17T00:00:00Z</updated>
+  <updated>2026-06-18T00:00:00Z</updated>
   <author>
     <name>Ryon Sherman</name>
   </author>
+  
+  <entry>
+    <title>Rebound — Training Neural Network Bots with PPO</title>
+    <link href="https://ryonsherman.github.io/blog/rebound-nn.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/rebound-nn.html</id>
+    <published>2026-06-18T00:00:00Z</published>
+    <updated>2026-06-18T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>A follow-up to <a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a>. The original AI used hand-coded heuristics — pick a target, calculate a bounce angle, fire on a timer, raise shield when threatened. It worked, but it was predictable and capped in skill. I replaced it with PPO-trained neural networks using Stable-Baselines3.</p>
+<h2>Observation space</h2>
+<p>I went with a <strong>112-float vector</strong> over a grid/CNN approach. The game state is already structured data — positions, velocities, health, cooldowns — so encoding it as pixels would add complexity without benefit.</p>
+<ul>
+<li><strong>Self</strong> (16 floats): health, cannon angle, shield status, powerups, timed effects</li>
+<li><strong>Enemies</strong> (30): 3 opponents × 10 features each (health, position, shield state)</li>
+<li><strong>Projectiles</strong> (48): 8 nearest projectiles × 6 features (relative position, velocity, threat level)</li>
+<li><strong>Powerups</strong> (12): 3 nearest × 4 features</li>
+<li><strong>Arena</strong> (6): obstacle rotation, wall distances</li>
+</ul>
+<h2>Action space</h2>
+<p><code>MultiDiscrete([32, 2, 2])</code> — 32 aim directions (11.25° each), binary fire, binary shield. That's 128 possible action combinations per step. Small enough for efficient PPO training, granular enough for precise control.</p>
+<p>The policy network is a three-layer MLP (256→128→64, ReLU) built by Stable-Baselines3's <code>MlpPolicy</code>. No custom PyTorch code — just <code>policy_kwargs</code> with <code>net_arch</code> and <code>activation_fn</code>.</p>
+<h2>Reward design</h2>
+<p>This was the hardest part. The initial reward function produced an agent that plateaued at 70% win rate against Medium AI and never improved.</p>
+<p><strong>What went wrong:</strong> Getting hit is frequent (lots of negative reward), but landing hits is rare (sparse positive reward). The agent learned to avoid damage by doing nothing useful. The fire penalty (-0.01 per shot) seemed minor, but when most shots miss early in training, 100 shots costs -1.0 reward — enough to suppress exploration entirely.</p>
+<p><strong>What fixed it:</strong> A per-step survival bonus of +0.05. Over a full 60-second match, that's +180 reward just for staying alive. This gave the agent a steady positive signal that didn't depend on combat outcomes, letting it learn defensive behaviors (shielding, positioning) without the noise of hit/miss randomness. Once survival was directly rewarded, everything else fell into place.</p>
+<p>Final reward weights: damage dealt +0.3 per brick, self damage -0.2, kill +5.0, death -5.0, shield block +2.0, fire penalty -0.001, survival +0.05/step.</p>
+<h2>Training pipeline</h2>
+<p>I wrapped <code>GameEngine</code> (the pure-Python game logic, no rendering) as a Gymnasium environment. Each training run is a 1v1 match: the agent versus one heuristic AI, with the other two castles removed.</p>
+<p>Four parallel game instances ran via a custom <code>ThreadedVecEnv</code> using <code>ThreadPoolExecutor</code>. Each instance runs at ~200 steps/second, giving ~800 total steps/second. A 1M-step training run takes about 20 minutes.</p>
+<h3>Curriculum</h3>
+<p>I trained in phases, each loading the previous checkpoint:</p>
+<ol>
+<li><strong>vs Easy AI</strong> — 450k steps → 100% win rate</li>
+<li><strong>vs Medium AI</strong> — 300k steps → 90-100% win rate</li>
+<li><strong>vs Hard AI</strong> — 900k steps → 80-100% win rate</li>
+</ol>
+<p>Transfer learning worked well — the Easy-trained model already knew how to aim and fire, so Medium training started at 90% win rate immediately.</p>
+<h2>The bugs</h2>
+<h3>Inference jitter</h3>
+<p>The trained model flickered in-game — cannon angle changing wildly every frame, shield toggling on and off. The model was trained with <code>frame_skip=4</code> (one decision per 4 game frames), but the game loop was running inference at 60fps. Four times more decisions than it was trained for. Fix: match the inference frame skip to training, plus rotation speed limiting and a shield hold timer to smooth outputs.</p>
+<h3>Quadrant clamping</h3>
+<p>The neural network occasionally aimed behind its own castle. Human players and heuristic AI both had mouse-position clamping to prevent this, but the NN controller was setting the angle directly. Fix: clamp the NN's aim point to the player's quadrant using the same function that human players use.</p>
+<h3>macOS multiprocessing</h3>
+<p>Stable-Baselines3's <code>SubprocVecEnv</code> uses Python's multiprocessing, which on macOS with Python 3.14 defaults to <code>forkserver</code>. This re-imports the main module in child processes, triggering Pygame init and crashing. Fix: replaced <code>SubprocVecEnv</code> with a <code>ThreadedVecEnv</code> using <code>ThreadPoolExecutor</code>. Threads avoid the issue while still providing parallelism for the CPU-bound game engine.</p>
+<h2>Results</h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Opponent</th>
+<th>Win Rate</th>
+<th>Steps</th>
+<th>Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Easy</td>
+<td>Easy AI</td>
+<td>100%</td>
+<td>450k</td>
+<td>~15 min</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>Medium AI</td>
+<td>90-100%</td>
+<td>300k</td>
+<td>~10 min</td>
+</tr>
+<tr>
+<td>Hard</td>
+<td>Hard AI</td>
+<td>80-100%</td>
+<td>900k</td>
+<td>~30 min</td>
+</tr>
+</tbody>
+</table>
+<p>The neural AI plays visibly differently from the heuristic AI — it uses the shield proactively instead of reactively, fires more aggressively, survives longer, and adapts to opponent behavior rather than following fixed rules.</p>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/pygame-rebound">ryonsherman/pygame-rebound</a>.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Survival is the best teacher</strong> — A simple per-step survival bonus outperformed every complex reward shaping attempt. The agent learned to shield and position itself naturally once staying alive was directly rewarded.</li>
+<li><strong>Match training and inference frequency</strong> — The frame skip mismatch between training (4 frames/decision) and inference (every frame) caused jitter that looked like a bug in the network. Always run inference at the same rate as training.</li>
+<li><strong>Threads over processes for game RL</strong> — On platforms where multiprocessing is problematic (macOS, Windows), threaded vector environments work surprisingly well for CPU-bound game engines.</li>
+<li><strong>Curriculum accelerates everything</strong> — Transfer learning from Easy → Medium → Hard meant each stage started with a competent baseline. Medium training began at 90% win rate from the Easy checkpoint.</li>
+<li><strong>Keep the safety nets</strong> — Even though the NN learned to aim within its quadrant, keeping the clamp as a hard constraint prevented edge cases without affecting performance. Defense in depth applies to RL too.</li>
+<li><strong>Reward functions are deceptive</strong> — A -0.01 fire penalty seemed trivial but was enough to suppress exploration entirely. Small weights compound over thousands of steps.</li>
+</ul></content>
+  </entry>
   
   <entry>
     <title>Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</title>
