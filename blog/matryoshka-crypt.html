@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/matryoshka-crypt.html">Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</a></li>
+  
+    <li><a href="/blog/nn-racer.html">NN Racer — Teaching a Neural Network to Drive with Evolution</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/bc246t.html">BC246T — A Serial Protocol Library for a Radio Scanner</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</h2>
+<span class="post-date">2026-06-17</span>
+<p>Encrypt a file with one password, and behind the scenes your data passes through a stack of cryptographic primitives in a structure inspired by Russian nesting dolls.</p>
+<pre><code> plaintext
+    ↓
+ ChaCha20-Poly1305  ← real layer
+    ↓
+ AES-256-GCM        ← real layer
+    ↓
+ ChaCha20-Poly1305  ← real layer
+    ↓
+ ChaCha20-Poly1305  ← junk layer (wraps everything below)
+    ↓
+ ChaCha20-Poly1305  ← junk layer (wraps everything below)
+    ↓
+ encrypted file (looks like random noise)
+</code></pre>
+<h2 id="how-it-works">How it works</h2>
+<p>By default, the tool uses 5 layers: 2 junk layers on the outside wrapping 3 real layers on the inside. Junk layers encrypt random data (they're real encryption — the plaintext just happens to be ciphertext from the layer below). Real layers encrypt your actual payload. An attacker can't tell which layers are real without decrypting them all.</p>
+<p>The container is <strong>nested</strong>, not flat. Each layer wraps the next inside its ciphertext. The file on disk contains only the outermost chunk's metadata — inner layers are hidden inside ciphertext. An attacker can't determine the layer count or structure without sequential decryption.</p>
+<pre><code>[salt][nonce][length][ciphertext containing...]
+  [salt][nonce][length][ciphertext containing...]
+    [salt][nonce][length][ciphertext containing...]
+      ...
+</code></pre>
+<p>Decryption peels layers iteratively: parse the outermost chunk, decrypt it, parse the next chunk from the result, and so on. Each layer must be decrypted in sequence — you can't skip ahead.</p>
+<h2 id="algorithm-diversity">Algorithm diversity</h2>
+<p>The real layers alternate between ChaCha20-Poly1305 and AES-256-GCM. Two different cryptographic primitives protect your data — breaking one doesn't expose the plaintext. Junk layers always use ChaCha20 (cheaper, since their output is discarded anyway).</p>
+<h2 id="key-derivation">Key derivation</h2>
+<p>All keys are derived from a single password using HKDF-SHA256 with per-layer context strings ("junk-0", "junk-1", "real-0", "real-1", "real-2"). No salt is stored in the file. Everything is deterministic from the password. Layer count is also derived from the password (actually from the user's parameter), meaning an attacker doesn't even know how many layers to peel.</p>
+<h2 id="no-metadata">No metadata</h2>
+<p>The output file has no header, no magic bytes, no indication of how many layers exist or what algorithms were used. It looks like random bytes. A wrong password fails at the first layer with a clear error — no partial or garbled output.</p>
+<h2 id="usage">Usage</h2>
+<pre><code>python -m matryoshka encrypt -i secret.txt -o secret.mryo -p &quot;passphrase&quot;
+python -m matryoshka decrypt -i secret.mryo -o secret.txt -p &quot;passphrase&quot;
+</code></pre>
+<p>Custom layer counts (odd, minimum 3):</p>
+<pre><code>python -m matryoshka encrypt -i secret.txt -o secret.mryo -p &quot;passphrase&quot; --layers 9
+</code></pre>
+<h2 id="the-bugs-that-made-it-real">The bugs that made it real</h2>
+<p>The initial implementation had three bugs that the test suite caught:</p>
+<p><strong>Junk layers overwrote data instead of wrapping it.</strong> The junk layer loop created independent encrypted random data and assigned it to <code>data</code>, discarding the real layers entirely. Fixed by having junk layers encrypt the accumulated data (which contains the real layers) instead of random bytes separately.</p>
+<p><strong>Decryption assumed flat format but encryption was nested.</strong> The original decrypt tried to parse all five chunks upfront from the file. But in the nested format, only chunk_0's metadata is in the file — inner chunks are embedded inside ciphertext. Fixed by changing decryption to iterative peeling.</p>
+<p><strong>InvalidTag exceptions weren't caught.</strong> The cryptography library raises <code>InvalidTag</code> (not <code>ValueError</code>) on wrong password or corrupted data. Had to import and catch it explicitly.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Nested encryption is a natural fit</strong> for layered crypto. Each layer wrapping the previous creates a clean, iterative decrypt loop.</li>
+<li><strong>Algorithm diversity is cheap.</strong> Alternating ChaCha20 and AES-GCM adds real security with minimal code complexity.</li>
+<li><strong>HKDF with context strings is elegant.</strong> Deriving independent keys from one password with different context strings is clean and well-supported by the cryptography library.</li>
+<li><strong>Design docs diverge from implementation.</strong> The initial plan described a flat format, but the code naturally produced a nested one. Always update docs after implementation changes.</li>
+<li><strong>Testing catches real bugs.</strong> All three bugs were caught by the test suite before any manual testing.</li>
+<li><strong>Minimal dependencies are achievable.</strong> The entire project runs on one external package (<code>cryptography</code>). The rest is stdlib.</li>
+</ul></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<div class="contact">
+  <span>Contact:</span>
+  <ul>
+    <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+      echo gmail.com | sed 's/^/ryon.sherman@/'
+    </a></li>
+  </ul>
+</div>
+<div class="feeds">
+  <span>Feed:</span>
+  <ul>
+    <li><a href="/blog/feed.atom">blog</a></li>
+  </ul>
+</div>
+<div class="archive">
+  <span>Source:</span>
+  <ul>
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+  </ul>
+</div>
+<div class="validation">
+  <span>Validation:</span>
+  <ul>
+    <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+    <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+    <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+  </ul>
+</div>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
