@@ -64,5 +64,5 @@ def load_posts(posts_dir):
         post['filename'] = name
         posts.append(post)
 
-    posts.sort(key=lambda p: p['date'], reverse=True)
+    posts.sort(key=lambda p: (p['date'], p['filename']), reverse=True)
     return posts

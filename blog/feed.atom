@@ -10,483 +10,122 @@
   </author>
   
   <entry>
-    <title>Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</title>
-    <link href="https://ryonsherman.github.io/blog/ai-docker-stack.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/ai-docker-stack.html</id>
+    <title>Voxscript — A CLI Script-to-Speech Tool with Piper TTS</title>
+    <link href="https://ryonsherman.github.io/blog/voxscript.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/voxscript.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>Two AMD-powered machines, no dedicated GPU, no CUDA. Just a Ryzen 9 6900HX with a Radeon 680M iGPU (RDNA2, Vulkan-only) and 23 GB of shared RAM on each. This stack runs LLM inference, image generation, text-to-speech, and a multi-agent tool ecosystem — all in Docker, all on consumer hardware.</p>
-<h2>Architecture</h2>
-<p>Two identical workstations on a local LAN. Machine 1 runs the full LLM server stack (llama.cpp with RPC, Open WebUI, LiteLLM, Kokoro TTS, Caddy reverse proxy). Machine 2 acts as a remote RPC worker, contributing its GPU memory for distributed inference. Both machines also run stable-diffusion.cpp for image generation with FLUX.1-dev.</p>
-<p>The key insight: llama.cpp's RPC support distributes model layers across GPU workers. With <code>--tensor-split 0.5,0.5</code>, each endpoint gets half the model layers. Both iGPUs combined can fit models that neither could run alone — like Qwen3.5-35B-A3B at Q4_K_M (~20 GiB), split roughly 10 GiB per machine.</p>
-<h2>Model Inference</h2>
-<p>The llama-server container itself has no GPU access — it's purely a coordinator. All GPU work is delegated to RPC workers:</p>
-<pre><code>llama-server ──RPC──► llama-rpc (local, Vulkan0, ~50% of layers)
-                │
-                └──RPC──► remote:50052 (remote, Vulkan0, ~50% of layers)
-</code></pre>
-<p>Three models have been tested:</p>
+    <content type="html"><p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
+<p>Voxscript is a Python CLI that reads a text file of dialog lines and produces a WAV file using <a href="https://github.com/rhasspy/piper">Piper TTS</a> — a fast neural text-to-speech engine that runs entirely locally on a CPU.</p>
+<h2>How it works</h2>
+<p>You write a script in a simple <code>SPEAKER: dialog</code> format with blank lines for pacing. The tool parses each utterance, pipes them through Piper voice models, and concatenates everything into a single WAV with configurable silence between speakers.</p>
+<h2>Multi-voice support</h2>
+<p>You provide a JSON voice map to assign different Piper voices to different speakers. Any speaker not mapped falls back to a default voice.</p>
+<h2>Technical bits</h2>
 <ul>
-<li><strong>Qwen3.5-35B-A3B Q4_K_M</strong> (~20 GiB) — MoE with 3B active parameters. General chat + coding.</li>
-<li><strong>Qwen3.6-35B-A3B Q4_K_M</strong> (~20 GiB) — ~14% faster, better coding.</li>
-<li><strong>DeepSeek-Coder-33B-Instruct Q4_K_M</strong> (~19 GiB) — Dense 33B, all params active. Slower.</li>
+<li>Text is chunked at 500 characters (sentence-aware) before synthesis, keeping audio segments manageable for Piper</li>
+<li>Audio is concatenated as 16-bit PCM WAV, mono</li>
+<li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
+<li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
 </ul>
-<p>The MoE models are ~10x faster than the dense 33B because only 3B parameters activate per token. File size is similar but throughput is vastly different. On memory-constrained hardware, MoE is the clear winner.</p>
-<p>Model switching is handled by <code>llama-docker.sh</code> — it saves the model path, rewrites LiteLLM config, and restarts services. Vision models are auto-detected via <code>.mmproj.gguf</code> files alongside the GGUF.</p>
-<h2>Image Generation</h2>
-<p>stable-diffusion.cpp is built from source with Vulkan support. FLUX.1-dev uses four model files: the diffusion model (6.5 GB), VAE, CLIP-L, and T5-XXL. LoRA support is built in. A separate instance on machine 2 runs FLUX.1-Kontext-dev for instruction-based image editing (remixing).</p>
-<p>Only one stack runs at a time — both use port 8000 and share the GPU memory.</p>
-<h2>The MCP Tool Ecosystem</h2>
-<p>Four Model Context Protocol servers run as separate containers, all auto-injected into Open WebUI via a middleware patch:</p>
-<ul>
-<li><strong>Web Search</strong> — DuckDuckGo + Reddit search (consolidated from separate services)</li>
-<li><strong>Memory</strong> — Long-term semantic search with fastembed</li>
-<li><strong>Memory (read-only)</strong> — For temporary chats (<code>local:*</code> prefix)</li>
-<li><strong>Local Assistant</strong> — Weather (NWS API) and traffic (TomTom API), with TTS-friendly speech output</li>
-</ul>
-<p>The middleware patch checks whether a chat is temporary and swaps writeable memory for read-only accordingly.</p>
-<h2>Text-to-Speech</h2>
-<p>Kokoro-FastAPI runs on CPU (the GPU is busy with the LLM). The <code>af_heart</code> voice is remapped to <code>af_bella</code> for a warmer tone. Two patches are applied at container entrypoint: unit normalization ("mph" → "miles per hour") and compass direction expansion ("WNW" → "west-northwest").</p>
-<h2>LiteLLM API Proxy</h2>
-<p>LiteLLM exposes the active model at <code>/v1/</code> on port 4000 with authentication. This means any OpenAI-compatible tool can connect — aider, Continue VS Code extension, or anything else:</p>
-<pre><code>aider --model openai/qwen3.6 --openai-api-base http://workstation1:4000/v1
-</code></pre>
-<h2>Slot Monitor</h2>
-<p>A live terminal UI (<code>monitor.py</code>) polls llama-server's <code>/slots</code> and <code>/health</code> endpoints every 3 seconds. It tracks per-slot activity (prefill/generating/idle), tokens decoded and remaining, instant tok/s, and ETA. Completion history auto-persists to JSONL. Two rendering modes: Rich (color, progress bars) and Plain (ASCII-only) for headless SSH sessions.</p>
-<h2>Key Lessons</h2>
-<ol>
-<li>
-<p><strong>MoE vs Dense</strong> — 35B MoE (3B active) is ~10x faster than 33B dense. Same file size, vastly different throughput. Always prefer MoE on constrained hardware.</p>
-</li>
-<li>
-<p><strong>RPC decouples GPU access</strong> — The llama-server container doesn't need <code>/dev/dri</code>. All GPU work is delegated to RPC workers. Startup ordering matters: RPC workers need time to initialize Vulkan before llama-server connects.</p>
-</li>
-<li>
-<p><strong>Startup race conditions</strong> — Docker Compose <code>--depends-on</code> only waits for container start, not service readiness. A full stop/start cycle is more reliable than individual restarts.</p>
-</li>
-<li>
-<p><strong>Context budgeting</strong> — With 23 GB shared RAM and ~20 GiB models, KV cache space is tight. 65k context works for MoE models but would need reduction for dense models.</p>
-</li>
-<li>
-<p><strong>Two machines, one cluster</strong> — Spreading inference across two consumer laptops over LAN is viable. Network latency adds ~5-10% overhead but doubles the available GPU memory. The same approach could scale to more nodes for larger models.</p>
-</li>
-</ol></content>
-  </entry>
-  
-  <entry>
-    <title>Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</title>
-    <link href="https://ryonsherman.github.io/blog/arduino-wifi-jammer.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/arduino-wifi-jammer.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
-<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" width="768" alt="12-unit jamming array on channel 1"></a></p>
-<h2>Architecture</h2>
-<p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
-<p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
-<h2>Fan-out algorithm</h2>
-<p>Instead of all 12 slaves hitting the same center frequency, they spread across the full 22MHz Wi-Fi channel width at 2MHz intervals:</p>
-<pre><code>center_freq + (local_idx * 2) - (group_size - 1)
-</code></pre>
-<p>On channel 6 (center 2437 MHz), slave 0 transmits at 2426 MHz and slave 11 at 2448 MHz. This completely blankets the channel rather than leaving gaps between overlapping transmissions.</p>
-<h2>Operating modes</h2>
-<ul>
-<li><strong>Single channel</strong> — All 12 slaves fan out across one channel for maximum power density</li>
-<li><strong>Full spectrum</strong> — Slaves spread across 2415-2470 MHz at 5MHz spacing, covering all 13 channels</li>
-<li><strong>Custom</strong> — Assign any number of slaves to any channels (e.g. <code>set 4@1,2@6,2@11</code>)</li>
-<li><strong>Sweep</strong> — All slaves cycle channels 1-13 together at configurable dwell (default 200ms)</li>
-<li><strong>Adaptive</strong> — Master scans all channels for 2 seconds, identifies the busiest ones, and assigns slaves dynamically with auto-rescan every 30s</li>
-</ul>
-<h2>Patterns</h2>
-<p>Beyond continuous transmission, the system supports pulsed (alternating on/off), burst (custom duty cycle), and random (per-packet LFSR frequency hopping within the assigned band).</p>
-<h2>Hardware control</h2>
-<p>A 3-position ON-OFF-ON switch on the master provides instant physical control: position 1 triggers full-spectrum jamming, center is off for software control, position 3 starts sweep mode. This works without any PC connection.</p>
-<h2>Legal</h2>
-<blockquote>
-<p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
-</blockquote>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>I2C vs SPI for control</strong> — When your RF modules use SPI (2.4 GHz), putting the command bus on I2C eliminates frequency contention. The two protocols coexist on the same wires without interference.</li>
-<li><strong>Fan-out algorithms matter</strong> — Naively blasting all nodes at the same center frequency wastes power in overlapping coverage. Spreading across the channel bandwidth gives you full spectral coverage with the same total power.</li>
-<li><strong>Hardware kill switches</strong> — A three-position toggle switch is the most reliable "off" mechanism. No software crashes, no firmware bugs, no serial connection required. Just throw the switch.</li>
-<li><strong>Adaptive sensing</strong> — Using one NRF24 in RX mode as a spectrum analyzer while the rest transmit is a neat trick. The master sees what's happening on every channel and can target the busiest ones without any external hardware.</li>
+<li><strong>Piper TTS is surprisingly good for local CPU</strong> — It runs real-time neural TTS on a laptop CPU with no GPU. Voice quality is decent across multiple models, and switching voices between lines is seamless.</li>
+<li><strong>Sentence-aware chunking matters</strong> — Piper has a maximum input length. Naively splitting at the character boundary produces broken audio mid-word. Chunking at sentence boundaries (500 chars) keeps segments natural.</li>
+<li><strong>Audio concatenation is trivial</strong> — Once you have individual WAV segments as 16-bit PCM byte arrays, joining them with silence padding is just array concatenation. Audio programming doesn't have to be complicated.</li>
+<li><strong>Voice mapping makes scripts flexible</strong> — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.</li>
+<li><strong>CLI-first design works</strong> — A simple <code>SPEAKER: dialog</code> format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.</li>
 </ul></content>
   </entry>
   
   <entry>
-    <title>BC246T — A Serial Protocol Library for a Radio Scanner</title>
-    <link href="https://ryonsherman.github.io/blog/bc246t.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/bc246t.html</id>
+    <title>uTorrent Bridge — A Compatibility Layer Nobody Asked For</title>
+    <link href="https://ryonsherman.github.io/blog/utorrent-bridge.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/utorrent-bridge.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>The Uniden BC246T is a handheld trunking scanner — it listens to police, fire, aircraft, and other radio traffic across a wide frequency range. Programming it by hand is tedious: scrolling through menus, entering frequencies one at a time, setting modulation and squelch codes. For anyone with more than a handful of channels, it's unbearable.</p>
-<p>So I reverse-engineered the serial protocol and wrote a Python library to control the thing from a computer.</p>
-<h2>The Protocol</h2>
-<p>The BC246T speaks a simple ASCII serial protocol at up to 57600 baud. Every command is a three-letter mnemonic followed by comma-separated arguments, terminated with <code>\r</code>. The scanner responds with the command echo, comma-separated values, and an OK/NG/ERR status.</p>
-<pre><code>PC → Radio:  MDL\r
-Radio → PC:  MDL,BC246T
+    <content type="html"><p>Back in the early 2010s, uTorrent had a Web API and a few mobile apps — uRemote, Torrent-fu — that let you manage your torrents from your phone. The catch: they only worked with uTorrent. If you ran rTorrent on a headless server (as any self-respecting Linux user did), you were out of luck.</p>
+<p>So I built a bridge.</p>
+<p>uTorrent Bridge is a compatibility layer that emulates the uTorrent Web API. You point it at your actual torrent backend (rTorrent, Transmission, whatever) and it speaks uTorrent's API to the outside world. Mobile apps connect to the bridge, the bridge translates commands to the real backend, everyone goes home happy.</p>
+<h2>Architecture</h2>
+<p>A plugin system with two sides: a <strong>client</strong> module talks to the real torrent backend (rTorrent via XML-RPC, Transmission via its RPC, etc.), and a <strong>server</strong> module presents the uTorrent Web API to clients. The bridge instantiates both and connects them together.</p>
+<pre><code class="language-python">module = __import__('modules.%s' % kwargs['client']['module'])
+client = getattr(module, 'Client')
+self.client = client(**kwargs['client'])
 
-PC → Radio:  STS\r
-Radio → PC:  STS,[16 chars display],[16 chars mode],...
+module = __import__('modules.%s' % kwargs['server']['module'])
+server = getattr(module, 'Server')
+self.server = server(**kwargs['server'])
 </code></pre>
-<p>The library wraps every command as a Python method or property. <code>model</code> returns <code>"BC246T"</code>. <code>firmware</code> returns something like <code>"1.00"</code>. <code>status</code> returns a dict with the display lines, icon states, squelch status, battery level, and weather alert.</p>
-<p>You can read the scanner's current state, send keypresses, tune to arbitrary frequencies via Quick Search (VFO mode), and even power it off remotely.</p>
-<h2>Programming Mode</h2>
-<p>The real power is in Program Mode. Enter it, and you can read and write every setting the scanner has — systems, channels, groups, quick keys, lockouts, delays, attenuation, alert behaviors.</p>
-<p>The library exposes this as two main objects:</p>
-<p><strong>Settings</strong> — Backlight timeout, battery save, key beep, opening message (the two-line text shown at power-on), priority mode. Getting and setting is just property access:</p>
-<pre><code class="language-python">dev.settings.backlight = dev.settings.BACKLIGHT.INFINITE
-dev.settings.opening_message = (&quot;FREQ SCAN&quot;, &quot;   ONLINE   &quot;)
+<p>The config was simple — pick your backend, pick your API flavor, set the ports:</p>
+<pre><code>[client]
+module = rtorrent
+address = 127.0.0.1
+port = 5000
+auth = xmlrpc
+
+[server]
+module = utorrent
+address = 127.0.0.1
+port = 8080
+auth = basic
 </code></pre>
-<p><strong>Systems</strong> — A list-like object that represents the scanner's system database. Systems have types (Conventional, Motorola Type II, EDACS, LTR, etc.), names, quick keys, hold times, and lockout states. Each system contains channel groups, which contain channels.</p>
-<pre><code class="language-python">sys = Device.System(dev, sys_type=Device.System.SYS_TYPE.CONVENTIONAL)
-sys.name = &quot;AIR BAND&quot;
-sys.quick_key = 1
-dev.systems.append(sys)
-</code></pre>
-<p>The entire serial protocol spec is documented inline in the source code — every command, every response field, every edge case. I transcribed it from Uniden's reference docs so the code served as both library and documentation.</p>
-<h2>The AVR Autoprogrammer</h2>
-<p>The same repo contains a companion hardware project: an AVR microcontroller that reads scanner programming data from an SD card over SPI, using a FAT16 filesystem. The idea was to create a standalone device — plug in an SD card with your channel config, connect the AVR to the scanner's serial port, and it programs everything automatically. No computer needed.</p>
-<p>It initializes the USART, SPI, SD card, and FAT16 filesystem, then would read configuration files and send the appropriate serial commands to the scanner. The code is in C, targeting an 8 MHz AVR, with custom SPI and SD card drivers written from scratch.</p>
-<h2>Abandoned, But Complete</h2>
-<p>Unlike the uTorrent Bridge which was mostly stubs, the BC246T library is genuinely useful. The protocol implementation is thorough, the API is clean, and the documentation is excellent. I used it to program my scanner more than once.</p>
-<p>The AVR autoprogrammer never got past initialization and filesystem mounting — the FAT16 driver was written but the actual scanner programming logic was never implemented. Still, getting raw SPI talking to an SD card on a bare-metal AVR is a rite of passage, and this code captures that moment.</p>
-<p>It's Python 2, it uses <code>map</code> and <code>lambda</code> freely, and the tuple-unpacking syntax (<code>def opening_message(self, (l1_char, l2_char))</code>) is a fossil from an older Python. But it works. And 10+ years later, it's still a solid example of what you can do when you just read the datasheet and start writing code.</p>
+<h2>What Got Built</h2>
+<p>Enough to prove the concept. The module system worked — you could plug in different backends by dropping a Python file in <code>modules/</code>. The base classes in <code>lib/</code> defined the contract, and each module implemented the translation layer.</p>
+<p>Planned backends included rTorrent, Transmission, SABnzbd, and Hellanzb. In practice, only the rTorrent module got any real work done — and even that was mostly stubs. The project was abandoned long before it was useful.</p>
+<h2>Why It Didn't Go Further</h2>
+<p>The uTorrent Web API was undocumented, versioned by whim, and changed between releases. Keeping up would have been a full-time cat-and-mouse game. Meanwhile, better solutions already existed — rTorrent had its own mobile apps, Transmission had remote GUIs, and the whole "bridge" approach was inherently fragile.</p>
+<p>It was the kind of project that makes total sense at 2 AM and much less sense in the morning. The kind where you solve an interesting technical problem (API translation! Plugin architecture!) without stopping to ask whether the problem should exist at all.</p>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>Documentation as code</strong> — Embedding the full protocol spec in the source comments meant the documentation and the implementation never drifted apart. It made maintenance trivial and debugging self-contained.</li>
-<li><strong>CVT (computer-verified testing)</strong> — Having a real device to test against made the difference between a library that works and one that almost works. Every command I implemented I could test immediately by watching the scanner's display respond.</li>
-<li><strong>Bare-metal AVR is a different world</strong> — Writing SPI and SD card drivers from scratch on an 8-bit microcontroller teaches you things about hardware timing and bit-banging that no high-level framework ever will.</li>
-<li><strong>Sometimes Python 2 was fine</strong> — The code still works a decade later. The right tool is the one that gets the job done, not necessarily the newest one.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>Canary — A Cryptographic Proof-of-Life Android App</title>
-    <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
-<h2>How it works</h2>
-<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
-<ul>
-<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
-<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
-<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
-<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
+<li><strong>Protocol translation is harder than it looks</strong> — every API has edge cases, and mapping one to another is never 1:1</li>
+<li><strong>Plugin architectures are fun to build</strong> — there's something satisfying about designing an interface that multiple backends can implement</li>
+<li><strong>Not every project needs to ship to be worth it</strong> — this one taught me more about HTTP APIs, RPC protocols, and system design than any tutorial could have</li>
+<li><strong>Sometimes the right call is to walk away</strong> — recognizing when a project has served its purpose (as a learning experience) and doesn't need to be finished is a skill in itself</li>
 </ul>
-<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
-<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
-<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
-<h2>Chain integrity</h2>
-<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
+<p>The code still sits in a Git repo, untouched since 2014. Python 2, <code>ConfigParser</code>, <code>__import__</code> string-based module loading — a time capsule of an era when these seemed like reasonable choices. I keep it around as a reminder that abandoned projects aren't failures. They're tuition.</p></content>
+  </entry>
+  
+  <entry>
+    <title>Rebound — A 4-Player Multiplayer Cannon Game</title>
+    <link href="https://ryonsherman.github.io/blog/rebound-game.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/rebound-game.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built a 4-player castle battle game with bouncing projectiles, power-ups, and online multiplayer.</p>
+<p><img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="768" alt="Rebound menu"></p>
+<h2>The game</h2>
+<p>Rebound is a real-time arena game where four castles occupy the corners of the arena, each with a rotating cannon that fires ricocheting projectiles. The goal is to destroy every brick in your opponents' castles.</p>
+<p>The mechanics are simple to pick up:</p>
 <ul>
-<li>Forging a valid ECDSA signature without access to the private key</li>
-<li>Rewriting every subsequent canary's hash reference</li>
-<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
+<li><strong>Mouse</strong> to aim your cannon</li>
+<li><strong>Click</strong> to fire — projectiles bounce off walls, obstacles, and each other</li>
+<li><strong>Space</strong> to activate a shield that deflects incoming shots</li>
+<li>Collect <strong>power-ups</strong> that spawn periodically for offensive and defensive abilities</li>
 </ul>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
+<p>As players are eliminated, the center obstacle spins faster, dynamic obstacles fill the dead zones, and the surviving players get faster projectiles with more bounces. The game escalates until one player remains.</p>
+<h2>Technical stack</h2>
+<p>Built from scratch in Python with <strong>Pygame</strong> for rendering and <strong>NATS</strong> for multiplayer. No game engine — the physics, collision detection, AI pathfinding, and networking are all custom.</p>
+<p>The AI uses ray casting to find bounce points off walls and obstacles, with three difficulty settings that tune fire rate, projectile speed, shield timing, and power-up spawn frequency.</p>
+<p>Multiplayer uses a server-authoritative architecture: the server runs the physics, clients send only raw inputs. NATS handles message routing with automatic matchmaking.</p>
+<h2>Power-ups</h2>
+<p>There are 12 power-ups in three categories — offensive abilities like piercing and spread shot, defensive abilities like shield pulse and healing shield, and instant pickups like repair kits and cannon boost. Each change adds a layer of tactical depth to the chaos of bouncing projectiles.</p>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>Hash chaining is elegant</strong> — Each canary links to the previous one via SHA-256, creating a tamper-evident chain. Breaking it requires either forging an ECDSA signature or rewriting every subsequent block — the same principle that makes blockchains work.</li>
-<li><strong>OpenTimestamps is magical</strong> — Anchoring a hash to the Bitcoin blockchain costs essentially nothing and provides a permanent, publicly verifiable timestamp that anyone can check without trusting a third party.</li>
-<li><strong>Android Keystore hardware backing</strong> — The ECDSA signing key never leaves the device's secure enclave. Even if the app is compromised, the key can't be extracted. This is the right way to handle secrets on mobile.</li>
-<li><strong>NFC for key transport</strong> — Storing the recovery seed on an NTAG tag means the key is physically bound to a token. No cloud backup, no server compromise, no sync issues. You have the tag or you don't.</li>
-<li><strong>GitHub Actions as build/deploy pipeline</strong> — Using CI to clearsign, timestamp, and tag each canary turned GitHub into a free public notary with built-in verification.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>cryptboard — Public Encrypted Dead Drops Over GitHub</title>
-    <link href="https://ryonsherman.github.io/blog/cryptboard.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/cryptboard.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>Post encrypted messages to a public GitHub repo. Anyone can see the files exist, but without the right ID they're just random noise. Since every message is tried by brute force during receive, there's no way to tell which message belongs to which recipient — or even if any given message is real at all.</p>
-<p><a href="https://github.com/ryonsherman/cryptboard">cryptboard on GitHub</a></p>
-<h2>How it works</h2>
-<p>A single Python script using AES-256-CBC. The ID is a 64-character hex string — SHA-256 hashed into an AES key. Each message is a JSON file in <code>messages/</code> with two fields: <code>h</code> (encrypted header, plaintext is always <code>CRYPTBOARD</code>) and <code>b</code> (encrypted body). Random IV per message. No sender info, no timestamps, no metadata of any kind.</p>
-<p>Sending forks the repo, commits a new message file, and opens a pull request. A GitHub Actions workflow validates it's an additive-only change to <code>messages/</code> with valid base64 — then auto-merges. Receiving does a shallow clone and brute-force decrypts every header. Header decrypts are microseconds, so scanning thousands of messages is fast.</p>
-<h2>The header trick</h2>
-<p>The fixed header plaintext is key to the design. Instead of deriving per-message metadata (which would leak information), every message includes an encrypted <code>CRYPTBOARD</code> string. When you receive, you try decrypting each header with your key. Only yours succeed. This means the receiver knows nothing about which blobs are theirs until they try — and an attacker with the full repo can't distinguish real messages from noise without every possible key.</p>
-<h2>No metadata</h2>
-<p>No timestamps in the message body. No encryption metadata beyond the IV. No sender identity. The UUID filenames are random. The CI workflow rejects any PR that modifies or deletes existing files — the repo is append-only. This means even GitHub itself can't tell you which user sent which message, since all sends go through PRs from forks.</p>
-<h2>Plausible deniability</h2>
-<p>Since any message can be decrypted by any ID (the header just won't match), there's no way to prove a given blob is intended for a given recipient. Combined with random filenames and no metadata, every message in the repo is indistinguishable from noise to anyone without the right key.</p>
-<h2>Usage</h2>
-<pre><code>cryptboard gen-id                      # generate a 64-char hex ID
-cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
-cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
-cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
-</code></pre>
-<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Plausible deniability via brute force</strong> — Making the receiver try every message instead of tagging them with metadata means there's no way to know which blob belongs to whom, even with full repo access. This is deniability by design, not by omission.</li>
-<li><strong>The header trick</strong> — Encrypting a fixed plaintext as a fast-match header turns O(n) full decrypts into O(n) cheap header attempts + O(1) body decrypts. It's a tiny idea that makes the whole system practical at scale.</li>
-<li><strong>GitHub Actions as a trusted gatekeeper</strong> — The CI workflow validates format, enforces append-only, and auto-merges. This means the repo is self-policing with no human moderator needed.</li>
-<li><strong>No metadata is a feature</strong> — No timestamps, no sender identity, no message size hints. The UUID filenames are random. Even GitHub's servers can't correlate messages to senders since all traffic goes through PRs from forks. Every datum you don't store is a datum you can't leak.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>Enigma — A Simulated Enigma Machine in Python</title>
-    <link href="https://ryonsherman.github.io/blog/enigma.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/enigma.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>I wanted to understand how the Enigma machine actually worked, so I built one.</p>
-<p>This Python implementation simulates a full three-rotor Enigma — the same class of machine used by Germany during WWII. It has everything: rotors with historical wiring, turnover points, a plugboard, and a reflector.</p>
-<h2>The signal path</h2>
-<p>Every time you press a key, the rightmost rotor steps forward. When a rotor reaches its turnover point (a specific letter), it kicks the rotor to its left. It's a mechanical odometer — III clicks through every letter, then II steps once, and so on.</p>
-<p>The electrical signal travels through the plugboard first (swapping pairs of letters), then forward through the rotors from right to left, hits the reflector (which bounces it back on a different path), then backward through the rotors left to right, and finally through the plugboard again. The result is the encrypted letter.</p>
-<p>Because of the reflector, encryption and decryption are the same operation — feeding the ciphertext back through the machine with the same settings gives you the plaintext. This is historically accurate and surprisingly elegant.</p>
-<h2>Rotor wiring</h2>
-<p>The 8 rotor types and 3 reflectors are modeled from the actual historical specifications. Each rotor has a unique substitution cipher and a turnover point — the letter at which it advances the next rotor. Rotors VI, VII, and VIII have two turnover points instead of one (a late-war feature).</p>
-<p>The ring setting offsets the wiring relative to the rotor's alphabet ring, adding another layer of key space.</p>
-<h2>Brute-force cracker</h2>
-<p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
-<p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
-<p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Building is the best way to understand</strong> — I could have read Wikipedia articles about the Enigma for hours and not understood it as deeply as one weekend of writing code. The signal path through plugboard → rotors → reflector → rotors → plugboard only clicks when you implement it yourself.</li>
-<li><strong>Reflector symmetry is beautiful</strong> — The reflector makes encryption and decryption the same operation. Feed ciphertext back through the same settings and you get plaintext. This is historically accurate and mathematically elegant.</li>
-<li><strong>Index of coincidence is a superpower</strong> — Scoring candidate decryptions by how well they match expected letter frequencies lets you find correct keys among millions of possibilities without reading any of them. It's the same technique that broke the real Enigma.</li>
-<li><strong>Multiprocessing is free speed</strong> — A million rotor combinations × starting positions is trivially parallel. The cracker scales to all available cores with almost no effort.</li>
-<li><strong>Historical rotors had quirks</strong> — Late-war rotors VI, VII, and VIII had two turnover points instead of one. Little details like this make simulation fun — you're not just implementing an algorithm, you're recreating a real piece of engineering history.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>FogMUD — Building a Modern Telnet MUD From Scratch</title>
-    <link href="https://ryonsherman.github.io/blog/fogmud.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/fogmud.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>FogMUD is a Multi-User Dungeon (MUD) — a text-based multiplayer roleplaying game — built entirely from scratch in Python using asyncio. No MUD libraries, no game engines. Just raw TCP sockets, telnet protocol negotiation, and a lot of JSON.</p>
-<p>Players connect via telnet, choose from three factions, 18 races, and 4 classes, and explore the frontier town of Drel — a world layered between reality and a mysterious force called the Veil. Over 10,000 lines of Python across ~50 source files, zero runtime dependencies beyond the standard library.</p>
-<h2>Origin</h2>
-<p>The project started as a Python 2 MUD in 2014, using asyncore (the long-deprecated async library). That codebase sat in a Git repository for nearly a decade. In 2025, it was resurrected with a complete rewrite to Python 3.10+ asyncio — preserving the JSON-first architecture and telnet protocol handling while completely rebuilding combat, classes, factions, NPCs, and the world itself.</p>
-<p>This rewrite is still ongoing. The project is very much a work in progress, and probably always will be — that's the nature of building a living world.</p>
-<h2>How It Works</h2>
-<p><strong>Telnet protocol</strong> — Raw RFC 854 telnet with IAC negotiation for echo control. Character-by-character input. Packet-level debugging to get it right. Modern telnet clients are forgiving, but the protocol is from 1983 and it shows.</p>
-<p><strong>asyncio</strong> — Single-process, event-driven concurrency. No threads, no GIL issues, no database. Player sessions are asyncio tasks, the game heartbeat runs on a loop, and everything is non-blocking.</p>
-<p><strong>JSON on disk</strong> — Every piece of game data lives in JSON files. Easy to debug (just open the file), but concurrent access requires asyncio.Lock per file plus atomic writes (write to temp, then rename). The DataManager creates timestamped backups before every save, rotating the last 10.</p>
-<h2>Key Systems</h2>
-<p><strong>Combat</strong> — Stat-based with multi-defender support. Players can fight multiple NPCs simultaneously. Three NPC aggression tiers: passive, aggressive (attacks on sight with a Charisma saving throw), and protective (defends specific mobs). NPCs that lose their target will <em>hunt the player through rooms</em> — tracking their path every heartbeat tick until they catch up.</p>
-<p><strong>The pursuit system</strong> — When combat breaks due to a player leaving the room, each engaged NPC becomes a "hunter" that tracks the player's path. Every 2-second heartbeat, each hunter advances one room. When they catch up, combat resumes with a dramatic "bursts into the room" message. There's even a <code>hunters</code> command to see what's chasing you.</p>
-<p><strong>Factions &amp; races</strong> — Three factions (Iron Accord, Verdant Circle, Aether Pact) each with 6 unique races drawn from classic fantasy. Races have stat modifiers that complement different playstyles.</p>
-<p><strong>Class halls</strong> — You don't pick your class at character creation. You start as a blank slate and must find the appropriate class hall in the world — then type <code>become fighter</code>. Subclasses unlock at level 20, requiring a return visit. This makes class choice feel meaningful instead of transactional.</p>
-<p><strong>Progression</strong> — A shared XP pool fuels both leveling and stat improvement. A stat gate prevents cheese: <code>sum(all_stats) &gt;= 60 + level * 2</code> before you can advance. You can't outrun your stats.</p>
-<p><strong>Trigger engine</strong> — Room triggers execute Python logic from JSON data, but through AST validation — only safe operations (comparisons, attribute access, boolean logic) are allowed. Unsafe code is rejected before execution.</p>
-<p><strong>Game time</strong> — A full calendar with seasons, time of day, and weather that's local to regions and affects gameplay. Seasonal recovery modifiers, dawn through midnight, spring through winter.</p>
-<h2>What's Still to Come</h2>
-<p>This is the part I'm most excited about. The foundations are solid, but the world is still being built:</p>
-<ul>
-<li>Skill system — 15 skills, 3 per class, with subclass-specific training formulas</li>
-<li>Party system with XP sharing and level range limits</li>
-<li>Quest system driven by the trigger engine</li>
-<li>Subclass abilities — the actual unique powers per archetype</li>
-<li>Porting 58+ rooms from the original codebase into Drel</li>
-<li>More NPC types, items, equipment, and crafting</li>
-<li>Building out Drel itself — the frontier town where players arrive, with NPCs that have schedules, shops that stock inventory, and secrets waiting to be found</li>
-</ul>
-<h2>A Living Project</h2>
-<p>FogMUD has been in development on and off since 2014. It sat dormant for years, then came back to life as a complete rewrite. It'll probably go through another rewrite someday — that's how these things go. The beauty of building a MUD from scratch is that there's no finish line. There's always another system to build, another room to describe, another bug to fix. The world grows as you do.</p>
-<p>For now, it's telnet, it's Python, it's JSON files, and it's very much a work in progress. And I wouldn't have it any other way.</p></content>
-  </entry>
-  
-  <entry>
-    <title>GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</title>
-    <link href="https://ryonsherman.github.io/blog/gps-tracker.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/gps-tracker.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>I built a battery-powered GPS tracker on an Arduino Nano that logs positions to internal EEPROM — no SD card, no breakout board, no cloud service. Just the chip and a GPS module.</p>
-<h2>How it works</h2>
-<p>Power up, and the Nano wakes, powers the GPS module via a transistor switch, acquires a fix, logs the position, kills power to the GPS, opens a 5-second serial command window, then goes into watchdog-timer deep sleep. Repeat on the configured interval.</p>
-<p>The whole power cycle is controlled by a 2N2222 transistor on D4 — GPS ground is switched so it draws zero current when off. During deep sleep the Nano itself pulls ~5µA.</p>
-<h2>Storage in EEPROM</h2>
-<p>The ATmega328p has 1KB of EEPROM. With 10-byte records (4 bytes lat, 4 bytes lon, 2 bytes dwell counter), that's 67 positions in a ring buffer. Oldest records are overwritten when full.</p>
-<p>The dwell counter tracks how many consecutive log cycles the tracker stayed in the same spot, which is useful for inferring parked vs. moving time.</p>
-<p>Data is retrieved over serial with a <code>D</code> command that dumps CSV. Python scripts then convert to GPX/KML for mapping, or snap to roads using OSRM's free match API.</p>
-<h2>Distance threshold</h2>
-<p>A movement check uses the haversine approximation — lat * 111320 m/°, lon * 111320 * cos(lat) m/° — and compares squared distance against a configurable threshold. If the tracker hasn't moved far enough, it increments the dwell counter instead of writing a new record. This saves storage for only meaningful location changes.</p>
-<h2>Battery life</h2>
-<p>With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep between cycles:</p>
-<table>
-<thead>
-<tr>
-<th>Interval</th>
-<th>Runtime</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>10 min</td>
-<td>~23 days</td>
-</tr>
-<tr>
-<td>15 min</td>
-<td>~34 days</td>
-</tr>
-<tr>
-<td>30 min</td>
-<td>~2 months</td>
-</tr>
-</tbody>
-</table>
-<p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Low-power design = control every microamp</strong> — The GPS module draws significant current, so switching its ground with a transistor makes it draw zero when off. During deep sleep the Nano pulls ~5 µA. Every component choice affects battery life.</li>
-<li><strong>EEPROM is tiny but reliable</strong> — 1 KB holds 67 GPS fix records with no filesystem overhead, no corruption risk from power loss, and no SD card that can shake loose. Sometimes the simplest storage is the best.</li>
-<li><strong>Haversine distance checks save storage</strong> — Checking whether the tracker actually moved before writing avoids filling the log with "still here" entries. It's a simple optimization that doubles useful recording time.</li>
-<li><strong>Watchdog timer deep sleep</strong> — The ATmega328p's watchdog timer wakes from deep sleep at configurable intervals without an external RTC. The GPS itself provides the time — no extra chip needed.</li>
-<li><strong>NMEA parsing from scratch</strong> — GPS sentences like <code>$GPGGA</code> are just comma-separated text. Parsing them character-by-character over SoftwareSerial teaches you exactly what information a GPS fix contains and why.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>Hardware RNG — SRAM PUF True Random Number Generator</title>
-    <link href="https://ryonsherman.github.io/blog/hardware-rng.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/hardware-rng.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>I built a true hardware random number generator using an Arduino Nano and some dirt-cheap I2C SRAM chips. It exploits the random power-up state of uninitialized static RAM to generate entropy — the same physical phenomenon used in SRAM Physical Unclonable Functions (PUFs) for device fingerprinting and cryptographic key generation.</p>
-<h2>The physics</h2>
-<p>Each SRAM cell is a cross-coupled inverter pair forming a bi-stable latch. When power is first applied, the circuit settles into either <code>0</code> or <code>1</code> depending on atomic-level manufacturing variations — random dopant fluctuations, oxide thickness differences, and threshold voltage mismatches between the two transistors. These variations are physically unpredictable, stable per-cell, uncorrelated between chips, and fresh each power cycle.</p>
-<p>Holcomb, Burleson, and Fu first characterized this at UMass in 2009. I'm exploiting their exact finding on a breadboard.</p>
-<h2>The circuit</h2>
-<p>Up to 8 PCF8570P I2C SRAM chips (256 bytes each, DIP-8, ~$2) share a common Vcc rail switched by a single 2N7000 N-channel MOSFET on Arduino D2. A 10kΩ pull-down holds the gate low during boot so the SRAMs stay off while the Arduino's GPIOs are tri-state. Two more 10kΩ resistors pull up the I2C bus, and each chip gets a 100nF decoupling cap.</p>
-<p>The sequence: power all chips off → wait 20ms (+ <code>micros()</code> jitter for extra entropy) → power on → wait 10ms → read each chip sequentially over I2C at 400kHz → repeat. The jitter in the timing itself adds entropy since <code>micros()</code> depends on unpredictable interrupt timing.</p>
-<h2>The sketch</h2>
-<p>The loop reads 256 bytes raw from each chip, applies debiasing, runs a health check, and streams the result over Serial at 115200 baud.</p>
-<p>Three debiasing methods are configurable at compile time:</p>
-<ul>
-<li><strong>XOR-fold</strong> (default) — XOR each byte with the previous. No throughput loss, removes additive bias.</li>
-<li><strong>Von Neumann</strong> — pair consecutive bits: <code>01</code> → <code>1</code>, <code>10</code> → <code>0</code>, discard <code>00</code>/<code>11</code>. Eliminates per-bit bias but ~25% throughput.</li>
-<li><strong>SHA-256</strong> — cryptographic whitening via <code>avr-crypto-lib</code>. Full NIST SP 800-90B conditioning.</li>
-</ul>
-<p>The health check is a repetition count test: if the same byte appears more than 32 times consecutively, the cycle is discarded. This catches stuck bits, dead chips, or wiring faults.</p>
-<p>Raw SRAM power-up data has a per-cell zeros rate of 45–55% and min-entropy of ~2–4 bits per byte — definitely needs conditioning before cryptographic use.</p>
-<h2>Performance</h2>
-<p>With 3 chips and XOR-fold: ~5.9 KB/s. With 8 chips and SHA-256: ~900 B/s conditioned. Throughput is limited more by I2C read speed than by SRAM settle time.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Entropy is everywhere if you know where to look</strong> — Every SRAM cell has a random power-up state determined by atomic-scale manufacturing variations. This is the same physics used in PUFs for cryptographic key generation, chip fingerprinting, and anti-counterfeiting.</li>
-<li><strong>Debiasing is essential</strong> — Raw SRAM data has 45-55% zeros rate with 2-4 bits of min-entropy per byte. Using XOR-fold preserves throughput while removing bias, and SHA-256 conditioning brings it to full cryptographic quality.</li>
-<li><strong>Timing jitter adds entropy</strong> — Simply adding <code>micros()</code> jitter between power-off and power-on introduces entropy from unpredictable interrupt timing — a free bonus source.</li>
-<li><strong>Health checks prevent silent failure</strong> — The repetition count test catches stuck bits, dead chips, and wiring faults before the bad data reaches the output. In cryptographic hardware, failing loudly is better than producing subtly biased output.</li>
-<li><strong>The circuit is dead simple</strong> — An N-channel MOSFET, two pull-up resistors, and a handful of decoupling caps is all it takes to turn $2 I2C SRAM chips into a true random number generator. The hardware is trivial; the understanding of what's happening at the physical level is not.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>Hello World — Noise, a Minimal Static Site Generator</title>
-    <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/hello-world.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>This site is built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator I wrote in Python.</p>
-<p>It takes Markdown content and Jinja2 templates and produces flat HTML files. Routes are declared with a decorator, much like Flask:</p>
-<pre><code class="language-python">@app.route('/blog')
-def blog_index(page):
-    page.data.update({
-        'title': &quot;Blog&quot;,
-        'posts': posts,
-    })
-</code></pre>
-<p>Noise handles the rest — finding the template, rendering the page, and writing the output file.</p>
-<p>I recently modernized it from the original Python 2 to 3.8+. Key changes:</p>
-<ul>
-<li>Replaced insecure <code>__import__()</code> with <code>importlib.util</code></li>
-<li>Fixed global Markdown state that leaked between renders</li>
-<li>Added a proper test suite (33 tests)</li>
-<li>Modern packaging with <code>pyproject.toml</code></li>
-<li>Built-in dev server with live reload via SSE</li>
-</ul>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Rewriting is sometimes necessary</strong> — The Python 2 → 3 migration was painful but forced me to understand every line of the codebase. The result is cleaner, safer, and properly tested.</li>
-<li><strong><code>__import__()</code> is a security hole</strong> — Using string-based module loading for plugin systems is convenient but dangerous. <code>importlib.util.spec_from_file_location()</code> is the safe alternative that I should have used from the start.</li>
-<li><strong>Static site generators are deceptively simple</strong> — The core loop is trivial: routes → templates → files. But the ecosystem (live reload, build optimization, error handling, template inheritance) is where the complexity hides.</li>
-<li><strong>Submodule workflows are fiddly</strong> — Having the blog output in a git submodule means every deploy is a two-step process: update the submodule, then update the parent. It's worth it for clean separation, but it adds friction.</li>
-<li><strong>Test suites pay for themselves instantly</strong> — The 33 tests caught regressions during the Python 3 migration that would have taken hours to find manually.</li>
-</ul></content>
-  </entry>
-  
-  <entry>
-    <title>NN Racer — Teaching a Neural Network to Drive with Evolution</title>
-    <link href="https://ryonsherman.github.io/blog/nn-racer.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/nn-racer.html</id>
-    <published>2026-06-12T00:00:00Z</published>
-    <updated>2026-06-12T00:00:00Z</updated>
-    <author>
-      <name>Ryon Sherman</name>
-    </author>
-    <content type="html"><p>A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.</p>
-<h2>The core loop</h2>
-<p>A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.</p>
-<h2>Ray sensors</h2>
-<p>Five sensors at -90°, -45°, 0°, +45°, +90° relative to the car's heading march outward in 3-pixel steps up to 200px range, checking if each point is on the track. Sensor readings are normalized to 0-1 and fed to the neural network. A coarse spatial grid makes these lookups O(1) instead of iterating through thousands of centerline points.</p>
-<h2>Car physics</h2>
-<p>Position/velocity/heading with forward acceleration and braking (no reversing). Speed-dependent steering — less effective at high speed. Lateral grip prevents sliding. Drag tuned so equilibrium equals top speed. The car is 23×9 pixels (~4.5m × 1.8m).</p>
-<h2>Genetic algorithm</h2>
-<p>Standard tournament-selection GA with a population of 50-60. Top 2 brains are kept as elites (unchanged). Tournament size 3 for parent selection. Weight-averaging crossover with random blending factor 0.3-0.7. Gaussian mutation with configurable standard deviation. Multiprocessing evaluation across all CPU cores using the dummy SDL video driver for headless rendering.</p>
-<h2>Procedural track generation</h2>
-<p>Tracks use Gustavo Maciel's algorithm: random points → convex hull (Andrew's Monotone Chain) → add displaced midpoints on each edge → enforce minimum 100° angle between adjacent control points → interpolate with centripetal Catmull-Rom splines (alpha=0.5) → reject tracks with self-intersecting boundaries.</p>
-<p>The fundamental insight: offsetting a centerline to create boundary polygons always risks self-intersection on tight curves. The fix is to stop using polygon boundaries for collision and instead use point-to-centerline distance. This is guaranteed correct for any centerline shape.</p>
-<h2>The GA convergence problem</h2>
-<p>The GA kept plateauing at 2-3 checkpoints. Weight-averaging crossover converges toward mediocrity by blending all individuals toward the mean. Combined with a flat fitness landscape (no gradient until the first checkpoint was crossed), the GA was stuck.</p>
-<p>The fix was replacing checkpoint line-crossing with angular progress tracking around the track centroid. Every pixel of forward movement increases fitness. This smooth, continuous signal was the key breakthrough that made learning possible.</p>
-<h2>Brain transfer learning</h2>
-<p>Brains trained on one track transfer surprisingly well to others. An oval-trained brain can navigate raceway, hairpin, and technical tracks after just a few generations of fine-tuning. This enabled chain training: train on oval → seed next track → fine-tune → save champion → repeat through all 30 curated seeds. Every single seed reached 1+ laps, most within 1-5 generations.</p>
-<p>The final experiment: train on randomly generated tracks, chaining the champion forward and discarding tracks that can't be solved within 20 generations. Over 400 random tracks, the brain learned a remarkably general driving policy — it could navigate almost any valid track the generator produced, often completing 5-8 laps in the allotted 5000 steps.</p>
-<h2>74 parameters</h2>
-<p>The entire network has only 74 parameters (6×8 + 8 + 8×2 + 2 = 74). That's fewer weights than a single linear layer in a modern neural network. Yet with a well-designed fitness function and enough generations, this tiny network learns to drive complex tracks at speed, handle tight hairpins, and generalize to tracks it's never seen before.</p>
-<p>The source is on GitHub at <a href="https://github.com/ryonsherman/nn-racer">ryonsherman/nn-racer</a>.</p>
-<h2>What I Learned</h2>
-<ul>
-<li><strong>Fitness function design is everything</strong> — A flat fitness landscape kills GAs. Angular progress (continuous, smooth) vs. checkpoint crossing (binary, sparse) was the difference between stalling at 2 checkpoints and completing 8 laps.</li>
-<li><strong>Weight-averaging crossover converges to mediocrity</strong> — It works for simple problems but tends toward the mean. Uniform crossover or approaches like NEAT or CMA-ES would maintain more diversity.</li>
-<li><strong>Distance-based collision is more robust than polygon offset</strong> — Offset boundary polygons self-intersect on tight curves. Point-to-centerline distance is simpler and always correct.</li>
-<li><strong>Centripetal Catmull-Rom prevents cusps</strong> — The centripetal parameterization (alpha=0.5) prevents self-intersections where uniform Catmull-Rom fails, making it ideal for generating track centerlines.</li>
-<li><strong>Brain transfer is surprisingly powerful</strong> — A general driving policy emerges from training on diverse tracks. Fine-tuning to a new track takes 1-5 generations vs. 20-50 from scratch.</li>
-<li><strong>74 parameters is enough</strong> — A tiny feedforward network with fewer weights than a single modern linear layer can learn complex driving behavior given the right training signal and enough iterations.</li>
+<li><strong>Richochet physics is simple arithmetic</strong> — Projectile bouncing off walls is just negating the velocity component. Bouncing off other projectiles requires some vector math. But the core physics fits in about 50 lines of Python.</li>
+<li><strong>Server-authoritative multiplayer is the right call</strong> — Clients send raw inputs, the server runs the physics. This prevents aimbots, wallhacks, and speed hacks without any client-side trust. NATS handles the routing cleanly.</li>
+<li><strong>AI via ray casting</strong> — The AI fires virtual rays off walls to find valid bounce paths to targets. It's simple, deterministic, and produces surprisingly human-looking play. Three difficulty levels tune fire rate and accuracy.</li>
+<li><strong>Power-ups add depth without complexity</strong> — Each power-up is just a timed modifier to an existing game stat. Spread shot sets projectile count to 3. Speed boost multiplies velocity. The core systems don't change; the modifiers just stack.</li>
+<li><strong>Pygame is enough</strong> — No Unity, no Unreal, no Godot. Pygame with software rendering runs a 4-player game with physics, particles, and AI at 60 FPS. Sometimes the simple tools are all you need.</li>
 </ul></content>
   </entry>
   
@@ -556,123 +195,484 @@ qrvid dec &quot;https://youtu.be/...&quot; -o restored.bin            # decode f
   </entry>
   
   <entry>
-    <title>Rebound — A 4-Player Multiplayer Cannon Game</title>
-    <link href="https://ryonsherman.github.io/blog/rebound-game.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/rebound-game.html</id>
+    <title>NN Racer — Teaching a Neural Network to Drive with Evolution</title>
+    <link href="https://ryonsherman.github.io/blog/nn-racer.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/nn-racer.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>I built a 4-player castle battle game with bouncing projectiles, power-ups, and online multiplayer.</p>
-<p><img src="https://github.com/ryonsherman/pygame-rebound/raw/main/screenshots/menu.png" width="768" alt="Rebound menu"></p>
-<h2>The game</h2>
-<p>Rebound is a real-time arena game where four castles occupy the corners of the arena, each with a rotating cannon that fires ricocheting projectiles. The goal is to destroy every brick in your opponents' castles.</p>
-<p>The mechanics are simple to pick up:</p>
-<ul>
-<li><strong>Mouse</strong> to aim your cannon</li>
-<li><strong>Click</strong> to fire — projectiles bounce off walls, obstacles, and each other</li>
-<li><strong>Space</strong> to activate a shield that deflects incoming shots</li>
-<li>Collect <strong>power-ups</strong> that spawn periodically for offensive and defensive abilities</li>
-</ul>
-<p>As players are eliminated, the center obstacle spins faster, dynamic obstacles fill the dead zones, and the surviving players get faster projectiles with more bounces. The game escalates until one player remains.</p>
-<h2>Technical stack</h2>
-<p>Built from scratch in Python with <strong>Pygame</strong> for rendering and <strong>NATS</strong> for multiplayer. No game engine — the physics, collision detection, AI pathfinding, and networking are all custom.</p>
-<p>The AI uses ray casting to find bounce points off walls and obstacles, with three difficulty settings that tune fire rate, projectile speed, shield timing, and power-up spawn frequency.</p>
-<p>Multiplayer uses a server-authoritative architecture: the server runs the physics, clients send only raw inputs. NATS handles message routing with automatic matchmaking.</p>
-<h2>Power-ups</h2>
-<p>There are 12 power-ups in three categories — offensive abilities like piercing and spread shot, defensive abilities like shield pulse and healing shield, and instant pickups like repair kits and cannon boost. Each change adds a layer of tactical depth to the chaos of bouncing projectiles.</p>
+    <content type="html"><p>A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.</p>
+<h2>The core loop</h2>
+<p>A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.</p>
+<h2>Ray sensors</h2>
+<p>Five sensors at -90°, -45°, 0°, +45°, +90° relative to the car's heading march outward in 3-pixel steps up to 200px range, checking if each point is on the track. Sensor readings are normalized to 0-1 and fed to the neural network. A coarse spatial grid makes these lookups O(1) instead of iterating through thousands of centerline points.</p>
+<h2>Car physics</h2>
+<p>Position/velocity/heading with forward acceleration and braking (no reversing). Speed-dependent steering — less effective at high speed. Lateral grip prevents sliding. Drag tuned so equilibrium equals top speed. The car is 23×9 pixels (~4.5m × 1.8m).</p>
+<h2>Genetic algorithm</h2>
+<p>Standard tournament-selection GA with a population of 50-60. Top 2 brains are kept as elites (unchanged). Tournament size 3 for parent selection. Weight-averaging crossover with random blending factor 0.3-0.7. Gaussian mutation with configurable standard deviation. Multiprocessing evaluation across all CPU cores using the dummy SDL video driver for headless rendering.</p>
+<h2>Procedural track generation</h2>
+<p>Tracks use Gustavo Maciel's algorithm: random points → convex hull (Andrew's Monotone Chain) → add displaced midpoints on each edge → enforce minimum 100° angle between adjacent control points → interpolate with centripetal Catmull-Rom splines (alpha=0.5) → reject tracks with self-intersecting boundaries.</p>
+<p>The fundamental insight: offsetting a centerline to create boundary polygons always risks self-intersection on tight curves. The fix is to stop using polygon boundaries for collision and instead use point-to-centerline distance. This is guaranteed correct for any centerline shape.</p>
+<h2>The GA convergence problem</h2>
+<p>The GA kept plateauing at 2-3 checkpoints. Weight-averaging crossover converges toward mediocrity by blending all individuals toward the mean. Combined with a flat fitness landscape (no gradient until the first checkpoint was crossed), the GA was stuck.</p>
+<p>The fix was replacing checkpoint line-crossing with angular progress tracking around the track centroid. Every pixel of forward movement increases fitness. This smooth, continuous signal was the key breakthrough that made learning possible.</p>
+<h2>Brain transfer learning</h2>
+<p>Brains trained on one track transfer surprisingly well to others. An oval-trained brain can navigate raceway, hairpin, and technical tracks after just a few generations of fine-tuning. This enabled chain training: train on oval → seed next track → fine-tune → save champion → repeat through all 30 curated seeds. Every single seed reached 1+ laps, most within 1-5 generations.</p>
+<p>The final experiment: train on randomly generated tracks, chaining the champion forward and discarding tracks that can't be solved within 20 generations. Over 400 random tracks, the brain learned a remarkably general driving policy — it could navigate almost any valid track the generator produced, often completing 5-8 laps in the allotted 5000 steps.</p>
+<h2>74 parameters</h2>
+<p>The entire network has only 74 parameters (6×8 + 8 + 8×2 + 2 = 74). That's fewer weights than a single linear layer in a modern neural network. Yet with a well-designed fitness function and enough generations, this tiny network learns to drive complex tracks at speed, handle tight hairpins, and generalize to tracks it's never seen before.</p>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/nn-racer">ryonsherman/nn-racer</a>.</p>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>Richochet physics is simple arithmetic</strong> — Projectile bouncing off walls is just negating the velocity component. Bouncing off other projectiles requires some vector math. But the core physics fits in about 50 lines of Python.</li>
-<li><strong>Server-authoritative multiplayer is the right call</strong> — Clients send raw inputs, the server runs the physics. This prevents aimbots, wallhacks, and speed hacks without any client-side trust. NATS handles the routing cleanly.</li>
-<li><strong>AI via ray casting</strong> — The AI fires virtual rays off walls to find valid bounce paths to targets. It's simple, deterministic, and produces surprisingly human-looking play. Three difficulty levels tune fire rate and accuracy.</li>
-<li><strong>Power-ups add depth without complexity</strong> — Each power-up is just a timed modifier to an existing game stat. Spread shot sets projectile count to 3. Speed boost multiplies velocity. The core systems don't change; the modifiers just stack.</li>
-<li><strong>Pygame is enough</strong> — No Unity, no Unreal, no Godot. Pygame with software rendering runs a 4-player game with physics, particles, and AI at 60 FPS. Sometimes the simple tools are all you need.</li>
+<li><strong>Fitness function design is everything</strong> — A flat fitness landscape kills GAs. Angular progress (continuous, smooth) vs. checkpoint crossing (binary, sparse) was the difference between stalling at 2 checkpoints and completing 8 laps.</li>
+<li><strong>Weight-averaging crossover converges to mediocrity</strong> — It works for simple problems but tends toward the mean. Uniform crossover or approaches like NEAT or CMA-ES would maintain more diversity.</li>
+<li><strong>Distance-based collision is more robust than polygon offset</strong> — Offset boundary polygons self-intersect on tight curves. Point-to-centerline distance is simpler and always correct.</li>
+<li><strong>Centripetal Catmull-Rom prevents cusps</strong> — The centripetal parameterization (alpha=0.5) prevents self-intersections where uniform Catmull-Rom fails, making it ideal for generating track centerlines.</li>
+<li><strong>Brain transfer is surprisingly powerful</strong> — A general driving policy emerges from training on diverse tracks. Fine-tuning to a new track takes 1-5 generations vs. 20-50 from scratch.</li>
+<li><strong>74 parameters is enough</strong> — A tiny feedforward network with fewer weights than a single modern linear layer can learn complex driving behavior given the right training signal and enough iterations.</li>
 </ul></content>
   </entry>
   
   <entry>
-    <title>uTorrent Bridge — A Compatibility Layer Nobody Asked For</title>
-    <link href="https://ryonsherman.github.io/blog/utorrent-bridge.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/utorrent-bridge.html</id>
+    <title>Hello World — Noise, a Minimal Static Site Generator</title>
+    <link href="https://ryonsherman.github.io/blog/hello-world.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/hello-world.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>Back in the early 2010s, uTorrent had a Web API and a few mobile apps — uRemote, Torrent-fu — that let you manage your torrents from your phone. The catch: they only worked with uTorrent. If you ran rTorrent on a headless server (as any self-respecting Linux user did), you were out of luck.</p>
-<p>So I built a bridge.</p>
-<p>uTorrent Bridge is a compatibility layer that emulates the uTorrent Web API. You point it at your actual torrent backend (rTorrent, Transmission, whatever) and it speaks uTorrent's API to the outside world. Mobile apps connect to the bridge, the bridge translates commands to the real backend, everyone goes home happy.</p>
-<h2>Architecture</h2>
-<p>A plugin system with two sides: a <strong>client</strong> module talks to the real torrent backend (rTorrent via XML-RPC, Transmission via its RPC, etc.), and a <strong>server</strong> module presents the uTorrent Web API to clients. The bridge instantiates both and connects them together.</p>
-<pre><code class="language-python">module = __import__('modules.%s' % kwargs['client']['module'])
-client = getattr(module, 'Client')
-self.client = client(**kwargs['client'])
-
-module = __import__('modules.%s' % kwargs['server']['module'])
-server = getattr(module, 'Server')
-self.server = server(**kwargs['server'])
+    <content type="html"><p>This site is built with <a href="https://github.com/ryonsherman/noise">Noise</a>, a minimal static site generator I wrote in Python.</p>
+<p>It takes Markdown content and Jinja2 templates and produces flat HTML files. Routes are declared with a decorator, much like Flask:</p>
+<pre><code class="language-python">@app.route('/blog')
+def blog_index(page):
+    page.data.update({
+        'title': &quot;Blog&quot;,
+        'posts': posts,
+    })
 </code></pre>
-<p>The config was simple — pick your backend, pick your API flavor, set the ports:</p>
-<pre><code>[client]
-module = rtorrent
-address = 127.0.0.1
-port = 5000
-auth = xmlrpc
-
-[server]
-module = utorrent
-address = 127.0.0.1
-port = 8080
-auth = basic
-</code></pre>
-<h2>What Got Built</h2>
-<p>Enough to prove the concept. The module system worked — you could plug in different backends by dropping a Python file in <code>modules/</code>. The base classes in <code>lib/</code> defined the contract, and each module implemented the translation layer.</p>
-<p>Planned backends included rTorrent, Transmission, SABnzbd, and Hellanzb. In practice, only the rTorrent module got any real work done — and even that was mostly stubs. The project was abandoned long before it was useful.</p>
-<h2>Why It Didn't Go Further</h2>
-<p>The uTorrent Web API was undocumented, versioned by whim, and changed between releases. Keeping up would have been a full-time cat-and-mouse game. Meanwhile, better solutions already existed — rTorrent had its own mobile apps, Transmission had remote GUIs, and the whole "bridge" approach was inherently fragile.</p>
-<p>It was the kind of project that makes total sense at 2 AM and much less sense in the morning. The kind where you solve an interesting technical problem (API translation! Plugin architecture!) without stopping to ask whether the problem should exist at all.</p>
+<p>Noise handles the rest — finding the template, rendering the page, and writing the output file.</p>
+<p>I recently modernized it from the original Python 2 to 3.8+. Key changes:</p>
+<ul>
+<li>Replaced insecure <code>__import__()</code> with <code>importlib.util</code></li>
+<li>Fixed global Markdown state that leaked between renders</li>
+<li>Added a proper test suite (33 tests)</li>
+<li>Modern packaging with <code>pyproject.toml</code></li>
+<li>Built-in dev server with live reload via SSE</li>
+</ul>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>Protocol translation is harder than it looks</strong> — every API has edge cases, and mapping one to another is never 1:1</li>
-<li><strong>Plugin architectures are fun to build</strong> — there's something satisfying about designing an interface that multiple backends can implement</li>
-<li><strong>Not every project needs to ship to be worth it</strong> — this one taught me more about HTTP APIs, RPC protocols, and system design than any tutorial could have</li>
-<li><strong>Sometimes the right call is to walk away</strong> — recognizing when a project has served its purpose (as a learning experience) and doesn't need to be finished is a skill in itself</li>
-</ul>
-<p>The code still sits in a Git repo, untouched since 2014. Python 2, <code>ConfigParser</code>, <code>__import__</code> string-based module loading — a time capsule of an era when these seemed like reasonable choices. I keep it around as a reminder that abandoned projects aren't failures. They're tuition.</p></content>
+<li><strong>Rewriting is sometimes necessary</strong> — The Python 2 → 3 migration was painful but forced me to understand every line of the codebase. The result is cleaner, safer, and properly tested.</li>
+<li><strong><code>__import__()</code> is a security hole</strong> — Using string-based module loading for plugin systems is convenient but dangerous. <code>importlib.util.spec_from_file_location()</code> is the safe alternative that I should have used from the start.</li>
+<li><strong>Static site generators are deceptively simple</strong> — The core loop is trivial: routes → templates → files. But the ecosystem (live reload, build optimization, error handling, template inheritance) is where the complexity hides.</li>
+<li><strong>Submodule workflows are fiddly</strong> — Having the blog output in a git submodule means every deploy is a two-step process: update the submodule, then update the parent. It's worth it for clean separation, but it adds friction.</li>
+<li><strong>Test suites pay for themselves instantly</strong> — The 33 tests caught regressions during the Python 3 migration that would have taken hours to find manually.</li>
+</ul></content>
   </entry>
   
   <entry>
-    <title>Voxscript — A CLI Script-to-Speech Tool with Piper TTS</title>
-    <link href="https://ryonsherman.github.io/blog/voxscript.html" rel="alternate"/>
-    <id>https://ryonsherman.github.io/blog/voxscript.html</id>
+    <title>Hardware RNG — SRAM PUF True Random Number Generator</title>
+    <link href="https://ryonsherman.github.io/blog/hardware-rng.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/hardware-rng.html</id>
     <published>2026-06-12T00:00:00Z</published>
     <updated>2026-06-12T00:00:00Z</updated>
     <author>
       <name>Ryon Sherman</name>
     </author>
-    <content type="html"><p>I needed a way to turn dialog scripts into multi-voice audio without a DAW or audio editing.</p>
-<p>Voxscript is a Python CLI that reads a text file of dialog lines and produces a WAV file using <a href="https://github.com/rhasspy/piper">Piper TTS</a> — a fast neural text-to-speech engine that runs entirely locally on a CPU.</p>
+    <content type="html"><p>I built a true hardware random number generator using an Arduino Nano and some dirt-cheap I2C SRAM chips. It exploits the random power-up state of uninitialized static RAM to generate entropy — the same physical phenomenon used in SRAM Physical Unclonable Functions (PUFs) for device fingerprinting and cryptographic key generation.</p>
+<h2>The physics</h2>
+<p>Each SRAM cell is a cross-coupled inverter pair forming a bi-stable latch. When power is first applied, the circuit settles into either <code>0</code> or <code>1</code> depending on atomic-level manufacturing variations — random dopant fluctuations, oxide thickness differences, and threshold voltage mismatches between the two transistors. These variations are physically unpredictable, stable per-cell, uncorrelated between chips, and fresh each power cycle.</p>
+<p>Holcomb, Burleson, and Fu first characterized this at UMass in 2009. I'm exploiting their exact finding on a breadboard.</p>
+<h2>The circuit</h2>
+<p>Up to 8 PCF8570P I2C SRAM chips (256 bytes each, DIP-8, ~$2) share a common Vcc rail switched by a single 2N7000 N-channel MOSFET on Arduino D2. A 10kΩ pull-down holds the gate low during boot so the SRAMs stay off while the Arduino's GPIOs are tri-state. Two more 10kΩ resistors pull up the I2C bus, and each chip gets a 100nF decoupling cap.</p>
+<p>The sequence: power all chips off → wait 20ms (+ <code>micros()</code> jitter for extra entropy) → power on → wait 10ms → read each chip sequentially over I2C at 400kHz → repeat. The jitter in the timing itself adds entropy since <code>micros()</code> depends on unpredictable interrupt timing.</p>
+<h2>The sketch</h2>
+<p>The loop reads 256 bytes raw from each chip, applies debiasing, runs a health check, and streams the result over Serial at 115200 baud.</p>
+<p>Three debiasing methods are configurable at compile time:</p>
+<ul>
+<li><strong>XOR-fold</strong> (default) — XOR each byte with the previous. No throughput loss, removes additive bias.</li>
+<li><strong>Von Neumann</strong> — pair consecutive bits: <code>01</code> → <code>1</code>, <code>10</code> → <code>0</code>, discard <code>00</code>/<code>11</code>. Eliminates per-bit bias but ~25% throughput.</li>
+<li><strong>SHA-256</strong> — cryptographic whitening via <code>avr-crypto-lib</code>. Full NIST SP 800-90B conditioning.</li>
+</ul>
+<p>The health check is a repetition count test: if the same byte appears more than 32 times consecutively, the cycle is discarded. This catches stuck bits, dead chips, or wiring faults.</p>
+<p>Raw SRAM power-up data has a per-cell zeros rate of 45–55% and min-entropy of ~2–4 bits per byte — definitely needs conditioning before cryptographic use.</p>
+<h2>Performance</h2>
+<p>With 3 chips and XOR-fold: ~5.9 KB/s. With 8 chips and SHA-256: ~900 B/s conditioned. Throughput is limited more by I2C read speed than by SRAM settle time.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Entropy is everywhere if you know where to look</strong> — Every SRAM cell has a random power-up state determined by atomic-scale manufacturing variations. This is the same physics used in PUFs for cryptographic key generation, chip fingerprinting, and anti-counterfeiting.</li>
+<li><strong>Debiasing is essential</strong> — Raw SRAM data has 45-55% zeros rate with 2-4 bits of min-entropy per byte. Using XOR-fold preserves throughput while removing bias, and SHA-256 conditioning brings it to full cryptographic quality.</li>
+<li><strong>Timing jitter adds entropy</strong> — Simply adding <code>micros()</code> jitter between power-off and power-on introduces entropy from unpredictable interrupt timing — a free bonus source.</li>
+<li><strong>Health checks prevent silent failure</strong> — The repetition count test catches stuck bits, dead chips, and wiring faults before the bad data reaches the output. In cryptographic hardware, failing loudly is better than producing subtly biased output.</li>
+<li><strong>The circuit is dead simple</strong> — An N-channel MOSFET, two pull-up resistors, and a handful of decoupling caps is all it takes to turn $2 I2C SRAM chips into a true random number generator. The hardware is trivial; the understanding of what's happening at the physical level is not.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</title>
+    <link href="https://ryonsherman.github.io/blog/gps-tracker.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/gps-tracker.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built a battery-powered GPS tracker on an Arduino Nano that logs positions to internal EEPROM — no SD card, no breakout board, no cloud service. Just the chip and a GPS module.</p>
 <h2>How it works</h2>
-<p>You write a script in a simple <code>SPEAKER: dialog</code> format with blank lines for pacing. The tool parses each utterance, pipes them through Piper voice models, and concatenates everything into a single WAV with configurable silence between speakers.</p>
-<h2>Multi-voice support</h2>
-<p>You provide a JSON voice map to assign different Piper voices to different speakers. Any speaker not mapped falls back to a default voice.</p>
-<h2>Technical bits</h2>
-<ul>
-<li>Text is chunked at 500 characters (sentence-aware) before synthesis, keeping audio segments manageable for Piper</li>
-<li>Audio is concatenated as 16-bit PCM WAV, mono</li>
-<li>Blank lines in the script insert longer pauses and reset the current speaker, letting you control pacing</li>
-<li>Rate control via <code>--length-scale</code> (1.0 is normal, lower = faster, higher = slower)</li>
-</ul>
+<p>Power up, and the Nano wakes, powers the GPS module via a transistor switch, acquires a fix, logs the position, kills power to the GPS, opens a 5-second serial command window, then goes into watchdog-timer deep sleep. Repeat on the configured interval.</p>
+<p>The whole power cycle is controlled by a 2N2222 transistor on D4 — GPS ground is switched so it draws zero current when off. During deep sleep the Nano itself pulls ~5µA.</p>
+<h2>Storage in EEPROM</h2>
+<p>The ATmega328p has 1KB of EEPROM. With 10-byte records (4 bytes lat, 4 bytes lon, 2 bytes dwell counter), that's 67 positions in a ring buffer. Oldest records are overwritten when full.</p>
+<p>The dwell counter tracks how many consecutive log cycles the tracker stayed in the same spot, which is useful for inferring parked vs. moving time.</p>
+<p>Data is retrieved over serial with a <code>D</code> command that dumps CSV. Python scripts then convert to GPX/KML for mapping, or snap to roads using OSRM's free match API.</p>
+<h2>Distance threshold</h2>
+<p>A movement check uses the haversine approximation — lat * 111320 m/°, lon * 111320 * cos(lat) m/° — and compares squared distance against a configurable threshold. If the tracker hasn't moved far enough, it increments the dwell counter instead of writing a new record. This saves storage for only meaningful location changes.</p>
+<h2>Battery life</h2>
+<p>With a 1500mAh 18650, a 60-second GPS acquisition timeout, and deep sleep between cycles:</p>
+<table>
+<thead>
+<tr>
+<th>Interval</th>
+<th>Runtime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10 min</td>
+<td>~23 days</td>
+</tr>
+<tr>
+<td>15 min</td>
+<td>~34 days</td>
+</tr>
+<tr>
+<td>30 min</td>
+<td>~2 months</td>
+</tr>
+</tbody>
+</table>
+<p>The limiting factor is the GPS cold-fix time, not the microcontroller power draw.</p>
 <h2>What I Learned</h2>
 <ul>
-<li><strong>Piper TTS is surprisingly good for local CPU</strong> — It runs real-time neural TTS on a laptop CPU with no GPU. Voice quality is decent across multiple models, and switching voices between lines is seamless.</li>
-<li><strong>Sentence-aware chunking matters</strong> — Piper has a maximum input length. Naively splitting at the character boundary produces broken audio mid-word. Chunking at sentence boundaries (500 chars) keeps segments natural.</li>
-<li><strong>Audio concatenation is trivial</strong> — Once you have individual WAV segments as 16-bit PCM byte arrays, joining them with silence padding is just array concatenation. Audio programming doesn't have to be complicated.</li>
-<li><strong>Voice mapping makes scripts flexible</strong> — A JSON voice map decouples the script from the voices. Change the map without touching the script to try different voice combinations.</li>
-<li><strong>CLI-first design works</strong> — A simple <code>SPEAKER: dialog</code> format with blank lines for pacing is intuitive enough to write in any text editor. No markup language to learn, no GUI to fight.</li>
+<li><strong>Low-power design = control every microamp</strong> — The GPS module draws significant current, so switching its ground with a transistor makes it draw zero when off. During deep sleep the Nano pulls ~5 µA. Every component choice affects battery life.</li>
+<li><strong>EEPROM is tiny but reliable</strong> — 1 KB holds 67 GPS fix records with no filesystem overhead, no corruption risk from power loss, and no SD card that can shake loose. Sometimes the simplest storage is the best.</li>
+<li><strong>Haversine distance checks save storage</strong> — Checking whether the tracker actually moved before writing avoids filling the log with "still here" entries. It's a simple optimization that doubles useful recording time.</li>
+<li><strong>Watchdog timer deep sleep</strong> — The ATmega328p's watchdog timer wakes from deep sleep at configurable intervals without an external RTC. The GPS itself provides the time — no extra chip needed.</li>
+<li><strong>NMEA parsing from scratch</strong> — GPS sentences like <code>$GPGGA</code> are just comma-separated text. Parsing them character-by-character over SoftwareSerial teaches you exactly what information a GPS fix contains and why.</li>
 </ul></content>
+  </entry>
+  
+  <entry>
+    <title>FogMUD — Building a Modern Telnet MUD From Scratch</title>
+    <link href="https://ryonsherman.github.io/blog/fogmud.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/fogmud.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>FogMUD is a Multi-User Dungeon (MUD) — a text-based multiplayer roleplaying game — built entirely from scratch in Python using asyncio. No MUD libraries, no game engines. Just raw TCP sockets, telnet protocol negotiation, and a lot of JSON.</p>
+<p>Players connect via telnet, choose from three factions, 18 races, and 4 classes, and explore the frontier town of Drel — a world layered between reality and a mysterious force called the Veil. Over 10,000 lines of Python across ~50 source files, zero runtime dependencies beyond the standard library.</p>
+<h2>Origin</h2>
+<p>The project started as a Python 2 MUD in 2014, using asyncore (the long-deprecated async library). That codebase sat in a Git repository for nearly a decade. In 2025, it was resurrected with a complete rewrite to Python 3.10+ asyncio — preserving the JSON-first architecture and telnet protocol handling while completely rebuilding combat, classes, factions, NPCs, and the world itself.</p>
+<p>This rewrite is still ongoing. The project is very much a work in progress, and probably always will be — that's the nature of building a living world.</p>
+<h2>How It Works</h2>
+<p><strong>Telnet protocol</strong> — Raw RFC 854 telnet with IAC negotiation for echo control. Character-by-character input. Packet-level debugging to get it right. Modern telnet clients are forgiving, but the protocol is from 1983 and it shows.</p>
+<p><strong>asyncio</strong> — Single-process, event-driven concurrency. No threads, no GIL issues, no database. Player sessions are asyncio tasks, the game heartbeat runs on a loop, and everything is non-blocking.</p>
+<p><strong>JSON on disk</strong> — Every piece of game data lives in JSON files. Easy to debug (just open the file), but concurrent access requires asyncio.Lock per file plus atomic writes (write to temp, then rename). The DataManager creates timestamped backups before every save, rotating the last 10.</p>
+<h2>Key Systems</h2>
+<p><strong>Combat</strong> — Stat-based with multi-defender support. Players can fight multiple NPCs simultaneously. Three NPC aggression tiers: passive, aggressive (attacks on sight with a Charisma saving throw), and protective (defends specific mobs). NPCs that lose their target will <em>hunt the player through rooms</em> — tracking their path every heartbeat tick until they catch up.</p>
+<p><strong>The pursuit system</strong> — When combat breaks due to a player leaving the room, each engaged NPC becomes a "hunter" that tracks the player's path. Every 2-second heartbeat, each hunter advances one room. When they catch up, combat resumes with a dramatic "bursts into the room" message. There's even a <code>hunters</code> command to see what's chasing you.</p>
+<p><strong>Factions &amp; races</strong> — Three factions (Iron Accord, Verdant Circle, Aether Pact) each with 6 unique races drawn from classic fantasy. Races have stat modifiers that complement different playstyles.</p>
+<p><strong>Class halls</strong> — You don't pick your class at character creation. You start as a blank slate and must find the appropriate class hall in the world — then type <code>become fighter</code>. Subclasses unlock at level 20, requiring a return visit. This makes class choice feel meaningful instead of transactional.</p>
+<p><strong>Progression</strong> — A shared XP pool fuels both leveling and stat improvement. A stat gate prevents cheese: <code>sum(all_stats) &gt;= 60 + level * 2</code> before you can advance. You can't outrun your stats.</p>
+<p><strong>Trigger engine</strong> — Room triggers execute Python logic from JSON data, but through AST validation — only safe operations (comparisons, attribute access, boolean logic) are allowed. Unsafe code is rejected before execution.</p>
+<p><strong>Game time</strong> — A full calendar with seasons, time of day, and weather that's local to regions and affects gameplay. Seasonal recovery modifiers, dawn through midnight, spring through winter.</p>
+<h2>What's Still to Come</h2>
+<p>This is the part I'm most excited about. The foundations are solid, but the world is still being built:</p>
+<ul>
+<li>Skill system — 15 skills, 3 per class, with subclass-specific training formulas</li>
+<li>Party system with XP sharing and level range limits</li>
+<li>Quest system driven by the trigger engine</li>
+<li>Subclass abilities — the actual unique powers per archetype</li>
+<li>Porting 58+ rooms from the original codebase into Drel</li>
+<li>More NPC types, items, equipment, and crafting</li>
+<li>Building out Drel itself — the frontier town where players arrive, with NPCs that have schedules, shops that stock inventory, and secrets waiting to be found</li>
+</ul>
+<h2>A Living Project</h2>
+<p>FogMUD has been in development on and off since 2014. It sat dormant for years, then came back to life as a complete rewrite. It'll probably go through another rewrite someday — that's how these things go. The beauty of building a MUD from scratch is that there's no finish line. There's always another system to build, another room to describe, another bug to fix. The world grows as you do.</p>
+<p>For now, it's telnet, it's Python, it's JSON files, and it's very much a work in progress. And I wouldn't have it any other way.</p></content>
+  </entry>
+  
+  <entry>
+    <title>Enigma — A Simulated Enigma Machine in Python</title>
+    <link href="https://ryonsherman.github.io/blog/enigma.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/enigma.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I wanted to understand how the Enigma machine actually worked, so I built one.</p>
+<p>This Python implementation simulates a full three-rotor Enigma — the same class of machine used by Germany during WWII. It has everything: rotors with historical wiring, turnover points, a plugboard, and a reflector.</p>
+<h2>The signal path</h2>
+<p>Every time you press a key, the rightmost rotor steps forward. When a rotor reaches its turnover point (a specific letter), it kicks the rotor to its left. It's a mechanical odometer — III clicks through every letter, then II steps once, and so on.</p>
+<p>The electrical signal travels through the plugboard first (swapping pairs of letters), then forward through the rotors from right to left, hits the reflector (which bounces it back on a different path), then backward through the rotors left to right, and finally through the plugboard again. The result is the encrypted letter.</p>
+<p>Because of the reflector, encryption and decryption are the same operation — feeding the ciphertext back through the machine with the same settings gives you the plaintext. This is historically accurate and surprisingly elegant.</p>
+<h2>Rotor wiring</h2>
+<p>The 8 rotor types and 3 reflectors are modeled from the actual historical specifications. Each rotor has a unique substitution cipher and a turnover point — the letter at which it advances the next rotor. Rotors VI, VII, and VIII have two turnover points instead of one (a late-war feature).</p>
+<p>The ring setting offsets the wiring relative to the rotor's alphabet ring, adding another layer of key space.</p>
+<h2>Brute-force cracker</h2>
+<p>The cracker tries all combinations of rotor order (60 permutations of 5 rotors taken 3 at a time) and starting positions (26^3 = 17,576) — about a million combinations total. It uses Python's multiprocessing to parallelize across CPU cores.</p>
+<p>Each candidate decryption is scored using a combination of index of coincidence and chi-squared analysis against English letter frequencies. Lower scores are more likely to be correct English text.</p>
+<p>There's also a crib mode — if you know a word that appears in the plaintext, the cracker can narrow the search dramatically by only scoring decryptions that contain that word.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Building is the best way to understand</strong> — I could have read Wikipedia articles about the Enigma for hours and not understood it as deeply as one weekend of writing code. The signal path through plugboard → rotors → reflector → rotors → plugboard only clicks when you implement it yourself.</li>
+<li><strong>Reflector symmetry is beautiful</strong> — The reflector makes encryption and decryption the same operation. Feed ciphertext back through the same settings and you get plaintext. This is historically accurate and mathematically elegant.</li>
+<li><strong>Index of coincidence is a superpower</strong> — Scoring candidate decryptions by how well they match expected letter frequencies lets you find correct keys among millions of possibilities without reading any of them. It's the same technique that broke the real Enigma.</li>
+<li><strong>Multiprocessing is free speed</strong> — A million rotor combinations × starting positions is trivially parallel. The cracker scales to all available cores with almost no effort.</li>
+<li><strong>Historical rotors had quirks</strong> — Late-war rotors VI, VII, and VIII had two turnover points instead of one. Little details like this make simulation fun — you're not just implementing an algorithm, you're recreating a real piece of engineering history.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>cryptboard — Public Encrypted Dead Drops Over GitHub</title>
+    <link href="https://ryonsherman.github.io/blog/cryptboard.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/cryptboard.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Post encrypted messages to a public GitHub repo. Anyone can see the files exist, but without the right ID they're just random noise. Since every message is tried by brute force during receive, there's no way to tell which message belongs to which recipient — or even if any given message is real at all.</p>
+<p><a href="https://github.com/ryonsherman/cryptboard">cryptboard on GitHub</a></p>
+<h2>How it works</h2>
+<p>A single Python script using AES-256-CBC. The ID is a 64-character hex string — SHA-256 hashed into an AES key. Each message is a JSON file in <code>messages/</code> with two fields: <code>h</code> (encrypted header, plaintext is always <code>CRYPTBOARD</code>) and <code>b</code> (encrypted body). Random IV per message. No sender info, no timestamps, no metadata of any kind.</p>
+<p>Sending forks the repo, commits a new message file, and opens a pull request. A GitHub Actions workflow validates it's an additive-only change to <code>messages/</code> with valid base64 — then auto-merges. Receiving does a shallow clone and brute-force decrypts every header. Header decrypts are microseconds, so scanning thousands of messages is fast.</p>
+<h2>The header trick</h2>
+<p>The fixed header plaintext is key to the design. Instead of deriving per-message metadata (which would leak information), every message includes an encrypted <code>CRYPTBOARD</code> string. When you receive, you try decrypting each header with your key. Only yours succeed. This means the receiver knows nothing about which blobs are theirs until they try — and an attacker with the full repo can't distinguish real messages from noise without every possible key.</p>
+<h2>No metadata</h2>
+<p>No timestamps in the message body. No encryption metadata beyond the IV. No sender identity. The UUID filenames are random. The CI workflow rejects any PR that modifies or deletes existing files — the repo is append-only. This means even GitHub itself can't tell you which user sent which message, since all sends go through PRs from forks.</p>
+<h2>Plausible deniability</h2>
+<p>Since any message can be decrypted by any ID (the header just won't match), there's no way to prove a given blob is intended for a given recipient. Combined with random filenames and no metadata, every message in the repo is indistinguishable from noise to anyone without the right key.</p>
+<h2>Usage</h2>
+<pre><code>cryptboard gen-id                      # generate a 64-char hex ID
+cryptboard send &lt;id&gt; &quot;message&quot;         # encrypt and post
+cryptboard receive &lt;id&gt;                # brute-force decrypt all messages
+cryptboard receive &lt;id&gt; --since 2026-01-01  # narrow the window
+</code></pre>
+<p>Requires <code>gh</code> (GitHub CLI) for sending, nothing but Python for receiving.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Plausible deniability via brute force</strong> — Making the receiver try every message instead of tagging them with metadata means there's no way to know which blob belongs to whom, even with full repo access. This is deniability by design, not by omission.</li>
+<li><strong>The header trick</strong> — Encrypting a fixed plaintext as a fast-match header turns O(n) full decrypts into O(n) cheap header attempts + O(1) body decrypts. It's a tiny idea that makes the whole system practical at scale.</li>
+<li><strong>GitHub Actions as a trusted gatekeeper</strong> — The CI workflow validates format, enforces append-only, and auto-merges. This means the repo is self-policing with no human moderator needed.</li>
+<li><strong>No metadata is a feature</strong> — No timestamps, no sender identity, no message size hints. The UUID filenames are random. Even GitHub's servers can't correlate messages to senders since all traffic goes through PRs from forks. Every datum you don't store is a datum you can't leak.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>Canary — A Cryptographic Proof-of-Life Android App</title>
+    <link href="https://ryonsherman.github.io/blog/canary-proof-of-life.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/canary-proof-of-life.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built an Android app that turns an NFC tag into a tamper-evident daily check-in system. Tap your phone to a sticker, and it generates a signed, chained, Bitcoin-anchored proof that you're alive.</p>
+<h2>How it works</h2>
+<p>The app runs on Android 9+ with Jetpack Compose and uses:</p>
+<ul>
+<li><strong>NFC</strong> — reads/writes a secret key to an NTAG RFID tag</li>
+<li><strong>Android Keystore</strong> — ECDSA P-256 signing key stored in hardware-backed storage</li>
+<li><strong>BIP39</strong> — 12-word recovery phrase generated from 128 bits of entropy</li>
+<li><strong>AES-GCM</strong> — encrypted backup of the GitHub token, recoverable via QR code</li>
+</ul>
+<p>When you tap your phone to the tag, the app signs a canary file containing the current timestamp, a monotonic counter, and the SHA-256 hash of the previous canary. It pushes the file to a public GitHub repo via the Contents API.</p>
+<p>A GitHub Action then GPG-clearsigns the file, submits it to the OpenTimestamps calendar (anchored to the Bitcoin blockchain), and creates a signed git tag.</p>
+<p>The result is a publicly verifiable chain of life signals — anyone can check the repo and confirm you were alive on a given day.</p>
+<h2>Chain integrity</h2>
+<p>Each canary chains to the previous one via SHA-256. Breaking the chain would require either:</p>
+<ul>
+<li>Forging a valid ECDSA signature without access to the private key</li>
+<li>Rewriting every subsequent canary's hash reference</li>
+<li>Tampering with the OpenTimestamps proofs anchored in the Bitcoin blockchain</li>
+</ul>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/canary/">ryonsherman/canary</a>, with a public dashboard at <code>ryonsherman.github.io/canary/</code> that verifies chain integrity client-side using the Web Crypto API — no server needed.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Hash chaining is elegant</strong> — Each canary links to the previous one via SHA-256, creating a tamper-evident chain. Breaking it requires either forging an ECDSA signature or rewriting every subsequent block — the same principle that makes blockchains work.</li>
+<li><strong>OpenTimestamps is magical</strong> — Anchoring a hash to the Bitcoin blockchain costs essentially nothing and provides a permanent, publicly verifiable timestamp that anyone can check without trusting a third party.</li>
+<li><strong>Android Keystore hardware backing</strong> — The ECDSA signing key never leaves the device's secure enclave. Even if the app is compromised, the key can't be extracted. This is the right way to handle secrets on mobile.</li>
+<li><strong>NFC for key transport</strong> — Storing the recovery seed on an NTAG tag means the key is physically bound to a token. No cloud backup, no server compromise, no sync issues. You have the tag or you don't.</li>
+<li><strong>GitHub Actions as build/deploy pipeline</strong> — Using CI to clearsign, timestamp, and tag each canary turned GitHub into a free public notary with built-in verification.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>BC246T — A Serial Protocol Library for a Radio Scanner</title>
+    <link href="https://ryonsherman.github.io/blog/bc246t.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/bc246t.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>The Uniden BC246T is a handheld trunking scanner — it listens to police, fire, aircraft, and other radio traffic across a wide frequency range. Programming it by hand is tedious: scrolling through menus, entering frequencies one at a time, setting modulation and squelch codes. For anyone with more than a handful of channels, it's unbearable.</p>
+<p>So I reverse-engineered the serial protocol and wrote a Python library to control the thing from a computer.</p>
+<h2>The Protocol</h2>
+<p>The BC246T speaks a simple ASCII serial protocol at up to 57600 baud. Every command is a three-letter mnemonic followed by comma-separated arguments, terminated with <code>\r</code>. The scanner responds with the command echo, comma-separated values, and an OK/NG/ERR status.</p>
+<pre><code>PC → Radio:  MDL\r
+Radio → PC:  MDL,BC246T
+
+PC → Radio:  STS\r
+Radio → PC:  STS,[16 chars display],[16 chars mode],...
+</code></pre>
+<p>The library wraps every command as a Python method or property. <code>model</code> returns <code>"BC246T"</code>. <code>firmware</code> returns something like <code>"1.00"</code>. <code>status</code> returns a dict with the display lines, icon states, squelch status, battery level, and weather alert.</p>
+<p>You can read the scanner's current state, send keypresses, tune to arbitrary frequencies via Quick Search (VFO mode), and even power it off remotely.</p>
+<h2>Programming Mode</h2>
+<p>The real power is in Program Mode. Enter it, and you can read and write every setting the scanner has — systems, channels, groups, quick keys, lockouts, delays, attenuation, alert behaviors.</p>
+<p>The library exposes this as two main objects:</p>
+<p><strong>Settings</strong> — Backlight timeout, battery save, key beep, opening message (the two-line text shown at power-on), priority mode. Getting and setting is just property access:</p>
+<pre><code class="language-python">dev.settings.backlight = dev.settings.BACKLIGHT.INFINITE
+dev.settings.opening_message = (&quot;FREQ SCAN&quot;, &quot;   ONLINE   &quot;)
+</code></pre>
+<p><strong>Systems</strong> — A list-like object that represents the scanner's system database. Systems have types (Conventional, Motorola Type II, EDACS, LTR, etc.), names, quick keys, hold times, and lockout states. Each system contains channel groups, which contain channels.</p>
+<pre><code class="language-python">sys = Device.System(dev, sys_type=Device.System.SYS_TYPE.CONVENTIONAL)
+sys.name = &quot;AIR BAND&quot;
+sys.quick_key = 1
+dev.systems.append(sys)
+</code></pre>
+<p>The entire serial protocol spec is documented inline in the source code — every command, every response field, every edge case. I transcribed it from Uniden's reference docs so the code served as both library and documentation.</p>
+<h2>The AVR Autoprogrammer</h2>
+<p>The same repo contains a companion hardware project: an AVR microcontroller that reads scanner programming data from an SD card over SPI, using a FAT16 filesystem. The idea was to create a standalone device — plug in an SD card with your channel config, connect the AVR to the scanner's serial port, and it programs everything automatically. No computer needed.</p>
+<p>It initializes the USART, SPI, SD card, and FAT16 filesystem, then would read configuration files and send the appropriate serial commands to the scanner. The code is in C, targeting an 8 MHz AVR, with custom SPI and SD card drivers written from scratch.</p>
+<h2>Abandoned, But Complete</h2>
+<p>Unlike the uTorrent Bridge which was mostly stubs, the BC246T library is genuinely useful. The protocol implementation is thorough, the API is clean, and the documentation is excellent. I used it to program my scanner more than once.</p>
+<p>The AVR autoprogrammer never got past initialization and filesystem mounting — the FAT16 driver was written but the actual scanner programming logic was never implemented. Still, getting raw SPI talking to an SD card on a bare-metal AVR is a rite of passage, and this code captures that moment.</p>
+<p>It's Python 2, it uses <code>map</code> and <code>lambda</code> freely, and the tuple-unpacking syntax (<code>def opening_message(self, (l1_char, l2_char))</code>) is a fossil from an older Python. But it works. And 10+ years later, it's still a solid example of what you can do when you just read the datasheet and start writing code.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Documentation as code</strong> — Embedding the full protocol spec in the source comments meant the documentation and the implementation never drifted apart. It made maintenance trivial and debugging self-contained.</li>
+<li><strong>CVT (computer-verified testing)</strong> — Having a real device to test against made the difference between a library that works and one that almost works. Every command I implemented I could test immediately by watching the scanner's display respond.</li>
+<li><strong>Bare-metal AVR is a different world</strong> — Writing SPI and SD card drivers from scratch on an 8-bit microcontroller teaches you things about hardware timing and bit-banging that no high-level framework ever will.</li>
+<li><strong>Sometimes Python 2 was fine</strong> — The code still works a decade later. The right tool is the one that gets the job done, not necessarily the newest one.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</title>
+    <link href="https://ryonsherman.github.io/blog/arduino-wifi-jammer.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/arduino-wifi-jammer.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>A distributed 13-node Wi-Fi jamming system with an Arduino Nano master and 12 MH-Tiny (ATtiny88) slave boards using NRF24L01+ transceivers. The master controls slaves via I2C to coordinate jamming across Wi-Fi channels 1-13.</p>
+<p><a href="https://github.com/ryonsherman/arduino-wifi-jammer/"><img src="https://github.com/ryonsherman/arduino-wifi-jammer/raw/main/screenshots/ch1-jamming.png" width="768" alt="12-unit jamming array on channel 1"></a></p>
+<h2>Architecture</h2>
+<p>Each node has an NRF24L01+ module for transmitting noise. The master uses its own NRF24 in RX mode to double as a spectrum analyzer — it scans all 13 channels and visualizes signal activity as bar graphs. Slaves receive commands over a shared I2C bus: set channel, start, stop, change power, or switch patterns.</p>
+<p>The key design decision was using I2C for control so the command bus doesn't contend with the 2.4GHz jamming signals. SPI (used by the NRF24 modules) and I2C coexist without interference.</p>
+<h2>Fan-out algorithm</h2>
+<p>Instead of all 12 slaves hitting the same center frequency, they spread across the full 22MHz Wi-Fi channel width at 2MHz intervals:</p>
+<pre><code>center_freq + (local_idx * 2) - (group_size - 1)
+</code></pre>
+<p>On channel 6 (center 2437 MHz), slave 0 transmits at 2426 MHz and slave 11 at 2448 MHz. This completely blankets the channel rather than leaving gaps between overlapping transmissions.</p>
+<h2>Operating modes</h2>
+<ul>
+<li><strong>Single channel</strong> — All 12 slaves fan out across one channel for maximum power density</li>
+<li><strong>Full spectrum</strong> — Slaves spread across 2415-2470 MHz at 5MHz spacing, covering all 13 channels</li>
+<li><strong>Custom</strong> — Assign any number of slaves to any channels (e.g. <code>set 4@1,2@6,2@11</code>)</li>
+<li><strong>Sweep</strong> — All slaves cycle channels 1-13 together at configurable dwell (default 200ms)</li>
+<li><strong>Adaptive</strong> — Master scans all channels for 2 seconds, identifies the busiest ones, and assigns slaves dynamically with auto-rescan every 30s</li>
+</ul>
+<h2>Patterns</h2>
+<p>Beyond continuous transmission, the system supports pulsed (alternating on/off), burst (custom duty cycle), and random (per-packet LFSR frequency hopping within the assigned band).</p>
+<h2>Hardware control</h2>
+<p>A 3-position ON-OFF-ON switch on the master provides instant physical control: position 1 triggers full-spectrum jamming, center is off for software control, position 3 starts sweep mode. This works without any PC connection.</p>
+<h2>Legal</h2>
+<blockquote>
+<p>⚠️ Wi-Fi jamming is illegal in most jurisdictions. This is an educational/research project about distributed RF systems and I2C command protocols. Do not operate without proper shielding, licensing, and legal authorization.</p>
+</blockquote>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>I2C vs SPI for control</strong> — When your RF modules use SPI (2.4 GHz), putting the command bus on I2C eliminates frequency contention. The two protocols coexist on the same wires without interference.</li>
+<li><strong>Fan-out algorithms matter</strong> — Naively blasting all nodes at the same center frequency wastes power in overlapping coverage. Spreading across the channel bandwidth gives you full spectral coverage with the same total power.</li>
+<li><strong>Hardware kill switches</strong> — A three-position toggle switch is the most reliable "off" mechanism. No software crashes, no firmware bugs, no serial connection required. Just throw the switch.</li>
+<li><strong>Adaptive sensing</strong> — Using one NRF24 in RX mode as a spectrum analyzer while the rest transmit is a neat trick. The master sees what's happening on every channel and can target the busiest ones without any external hardware.</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</title>
+    <link href="https://ryonsherman.github.io/blog/ai-docker-stack.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/ai-docker-stack.html</id>
+    <published>2026-06-12T00:00:00Z</published>
+    <updated>2026-06-12T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Two AMD-powered machines, no dedicated GPU, no CUDA. Just a Ryzen 9 6900HX with a Radeon 680M iGPU (RDNA2, Vulkan-only) and 23 GB of shared RAM on each. This stack runs LLM inference, image generation, text-to-speech, and a multi-agent tool ecosystem — all in Docker, all on consumer hardware.</p>
+<h2>Architecture</h2>
+<p>Two identical workstations on a local LAN. Machine 1 runs the full LLM server stack (llama.cpp with RPC, Open WebUI, LiteLLM, Kokoro TTS, Caddy reverse proxy). Machine 2 acts as a remote RPC worker, contributing its GPU memory for distributed inference. Both machines also run stable-diffusion.cpp for image generation with FLUX.1-dev.</p>
+<p>The key insight: llama.cpp's RPC support distributes model layers across GPU workers. With <code>--tensor-split 0.5,0.5</code>, each endpoint gets half the model layers. Both iGPUs combined can fit models that neither could run alone — like Qwen3.5-35B-A3B at Q4_K_M (~20 GiB), split roughly 10 GiB per machine.</p>
+<h2>Model Inference</h2>
+<p>The llama-server container itself has no GPU access — it's purely a coordinator. All GPU work is delegated to RPC workers:</p>
+<pre><code>llama-server ──RPC──► llama-rpc (local, Vulkan0, ~50% of layers)
+                │
+                └──RPC──► remote:50052 (remote, Vulkan0, ~50% of layers)
+</code></pre>
+<p>Three models have been tested:</p>
+<ul>
+<li><strong>Qwen3.5-35B-A3B Q4_K_M</strong> (~20 GiB) — MoE with 3B active parameters. General chat + coding.</li>
+<li><strong>Qwen3.6-35B-A3B Q4_K_M</strong> (~20 GiB) — ~14% faster, better coding.</li>
+<li><strong>DeepSeek-Coder-33B-Instruct Q4_K_M</strong> (~19 GiB) — Dense 33B, all params active. Slower.</li>
+</ul>
+<p>The MoE models are ~10x faster than the dense 33B because only 3B parameters activate per token. File size is similar but throughput is vastly different. On memory-constrained hardware, MoE is the clear winner.</p>
+<p>Model switching is handled by <code>llama-docker.sh</code> — it saves the model path, rewrites LiteLLM config, and restarts services. Vision models are auto-detected via <code>.mmproj.gguf</code> files alongside the GGUF.</p>
+<h2>Image Generation</h2>
+<p>stable-diffusion.cpp is built from source with Vulkan support. FLUX.1-dev uses four model files: the diffusion model (6.5 GB), VAE, CLIP-L, and T5-XXL. LoRA support is built in. A separate instance on machine 2 runs FLUX.1-Kontext-dev for instruction-based image editing (remixing).</p>
+<p>Only one stack runs at a time — both use port 8000 and share the GPU memory.</p>
+<h2>The MCP Tool Ecosystem</h2>
+<p>Four Model Context Protocol servers run as separate containers, all auto-injected into Open WebUI via a middleware patch:</p>
+<ul>
+<li><strong>Web Search</strong> — DuckDuckGo + Reddit search (consolidated from separate services)</li>
+<li><strong>Memory</strong> — Long-term semantic search with fastembed</li>
+<li><strong>Memory (read-only)</strong> — For temporary chats (<code>local:*</code> prefix)</li>
+<li><strong>Local Assistant</strong> — Weather (NWS API) and traffic (TomTom API), with TTS-friendly speech output</li>
+</ul>
+<p>The middleware patch checks whether a chat is temporary and swaps writeable memory for read-only accordingly.</p>
+<h2>Text-to-Speech</h2>
+<p>Kokoro-FastAPI runs on CPU (the GPU is busy with the LLM). The <code>af_heart</code> voice is remapped to <code>af_bella</code> for a warmer tone. Two patches are applied at container entrypoint: unit normalization ("mph" → "miles per hour") and compass direction expansion ("WNW" → "west-northwest").</p>
+<h2>LiteLLM API Proxy</h2>
+<p>LiteLLM exposes the active model at <code>/v1/</code> on port 4000 with authentication. This means any OpenAI-compatible tool can connect — aider, Continue VS Code extension, or anything else:</p>
+<pre><code>aider --model openai/qwen3.6 --openai-api-base http://workstation1:4000/v1
+</code></pre>
+<h2>Slot Monitor</h2>
+<p>A live terminal UI (<code>monitor.py</code>) polls llama-server's <code>/slots</code> and <code>/health</code> endpoints every 3 seconds. It tracks per-slot activity (prefill/generating/idle), tokens decoded and remaining, instant tok/s, and ETA. Completion history auto-persists to JSONL. Two rendering modes: Rich (color, progress bars) and Plain (ASCII-only) for headless SSH sessions.</p>
+<h2>Key Lessons</h2>
+<ol>
+<li>
+<p><strong>MoE vs Dense</strong> — 35B MoE (3B active) is ~10x faster than 33B dense. Same file size, vastly different throughput. Always prefer MoE on constrained hardware.</p>
+</li>
+<li>
+<p><strong>RPC decouples GPU access</strong> — The llama-server container doesn't need <code>/dev/dri</code>. All GPU work is delegated to RPC workers. Startup ordering matters: RPC workers need time to initialize Vulkan before llama-server connects.</p>
+</li>
+<li>
+<p><strong>Startup race conditions</strong> — Docker Compose <code>--depends-on</code> only waits for container start, not service readiness. A full stop/start cycle is more reliable than individual restarts.</p>
+</li>
+<li>
+<p><strong>Context budgeting</strong> — With 23 GB shared RAM and ~20 GiB models, KV cache space is tight. 65k context works for MoE models but would need reduction for dense models.</p>
+</li>
+<li>
+<p><strong>Two machines, one cluster</strong> — Spreading inference across two consumer laptops over LAN is viable. Network latency adds ~5-10% overhead but doubles the available GPU memory. The same approach could scale to more nodes for larger models.</p>
+</li>
+</ol></content>
   </entry>
   
 </feed>
