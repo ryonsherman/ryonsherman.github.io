@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/bc246t.html">BC246T — A Serial Protocol Library for a Radio Scanner</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/nn-racer.html">NN Racer — Teaching a Neural Network to Drive with Evolution</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>NN Racer — Teaching a Neural Network to Drive with Evolution</h2>
+<span class="post-date">2026-06-12</span>
+<p>A 2D car racing simulation where a neural-network-controlled AI learns to drive using a genetic algorithm. Built from scratch in Python with Pygame and NumPy. No ML frameworks, no pre-trained models — just a feedforward network, ray sensors, and evolution.</p>
+<h2 id="the-core-loop">The core loop</h2>
+<p>A car with 5 distance sensors drives around a procedurally-generated track. A neural network — 6 inputs (5 sensor distances + speed), 8 hidden neurons with tanh activation, 2 outputs (steering and acceleration) — controls the car. A genetic algorithm evolves a population of 60 brains over generations, with fitness based on angular progress around the track. The best brains are saved and can be replayed as colored overlay trails.</p>
+<h2 id="ray-sensors">Ray sensors</h2>
+<p>Five sensors at -90°, -45°, 0°, +45°, +90° relative to the car's heading march outward in 3-pixel steps up to 200px range, checking if each point is on the track. Sensor readings are normalized to 0-1 and fed to the neural network. A coarse spatial grid makes these lookups O(1) instead of iterating through thousands of centerline points.</p>
+<h2 id="car-physics">Car physics</h2>
+<p>Position/velocity/heading with forward acceleration and braking (no reversing). Speed-dependent steering — less effective at high speed. Lateral grip prevents sliding. Drag tuned so equilibrium equals top speed. The car is 23×9 pixels (~4.5m × 1.8m).</p>
+<h2 id="genetic-algorithm">Genetic algorithm</h2>
+<p>Standard tournament-selection GA with a population of 50-60. Top 2 brains are kept as elites (unchanged). Tournament size 3 for parent selection. Weight-averaging crossover with random blending factor 0.3-0.7. Gaussian mutation with configurable standard deviation. Multiprocessing evaluation across all CPU cores using the dummy SDL video driver for headless rendering.</p>
+<h2 id="procedural-track-generation">Procedural track generation</h2>
+<p>Tracks use Gustavo Maciel's algorithm: random points → convex hull (Andrew's Monotone Chain) → add displaced midpoints on each edge → enforce minimum 100° angle between adjacent control points → interpolate with centripetal Catmull-Rom splines (alpha=0.5) → reject tracks with self-intersecting boundaries.</p>
+<p>The fundamental insight: offsetting a centerline to create boundary polygons always risks self-intersection on tight curves. The fix is to stop using polygon boundaries for collision and instead use point-to-centerline distance. This is guaranteed correct for any centerline shape.</p>
+<h2 id="the-ga-convergence-problem">The GA convergence problem</h2>
+<p>The GA kept plateauing at 2-3 checkpoints. Weight-averaging crossover converges toward mediocrity by blending all individuals toward the mean. Combined with a flat fitness landscape (no gradient until the first checkpoint was crossed), the GA was stuck.</p>
+<p>The fix was replacing checkpoint line-crossing with angular progress tracking around the track centroid. Every pixel of forward movement increases fitness. This smooth, continuous signal was the key breakthrough that made learning possible.</p>
+<h2 id="brain-transfer-learning">Brain transfer learning</h2>
+<p>Brains trained on one track transfer surprisingly well to others. An oval-trained brain can navigate raceway, hairpin, and technical tracks after just a few generations of fine-tuning. This enabled chain training: train on oval → seed next track → fine-tune → save champion → repeat through all 30 curated seeds. Every single seed reached 1+ laps, most within 1-5 generations.</p>
+<p>The final experiment: train on randomly generated tracks, chaining the champion forward and discarding tracks that can't be solved within 20 generations. Over 400 random tracks, the brain learned a remarkably general driving policy — it could navigate almost any valid track the generator produced, often completing 5-8 laps in the allotted 5000 steps.</p>
+<h2 id="74-parameters">74 parameters</h2>
+<p>The entire network has only 74 parameters (6×8 + 8 + 8×2 + 2 = 74). That's fewer weights than a single linear layer in a modern neural network. Yet with a well-designed fitness function and enough generations, this tiny network learns to drive complex tracks at speed, handle tight hairpins, and generalize to tracks it's never seen before.</p>
+<p>The source is on GitHub at <a href="https://github.com/ryonsherman/nn-racer">ryonsherman/nn-racer</a>.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Fitness function design is everything</strong> — A flat fitness landscape kills GAs. Angular progress (continuous, smooth) vs. checkpoint crossing (binary, sparse) was the difference between stalling at 2 checkpoints and completing 8 laps.</li>
+<li><strong>Weight-averaging crossover converges to mediocrity</strong> — It works for simple problems but tends toward the mean. Uniform crossover or approaches like NEAT or CMA-ES would maintain more diversity.</li>
+<li><strong>Distance-based collision is more robust than polygon offset</strong> — Offset boundary polygons self-intersect on tight curves. Point-to-centerline distance is simpler and always correct.</li>
+<li><strong>Centripetal Catmull-Rom prevents cusps</strong> — The centripetal parameterization (alpha=0.5) prevents self-intersections where uniform Catmull-Rom fails, making it ideal for generating track centerlines.</li>
+<li><strong>Brain transfer is surprisingly powerful</strong> — A general driving policy emerges from training on diverse tracks. Fine-tuning to a new track takes 1-5 generations vs. 20-50 from scratch.</li>
+<li><strong>74 parameters is enough</strong> — A tiny feedforward network with fewer weights than a single modern linear layer can learn complex driving behavior given the right training signal and enough iterations.</li>
+</ul></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  Contact:
+  <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  Feed:
+  <li><a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  Source:
+    <li><a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  Validation:
+  <li><a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
