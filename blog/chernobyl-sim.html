@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/chernobyl-sim.html">Chernobyl Reactor Simulator — Modeling RBMK Physics in Pygame</a></li>
+  
+    <li><a href="/blog/rebound-nn.html">Rebound — Training Neural Network Bots with PPO</a></li>
+  
+    <li><a href="/blog/matryoshka-crypt.html">Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</a></li>
+  
+    <li><a href="/blog/nn-racer.html">NN Racer — Teaching a Neural Network to Drive with Evolution</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/bc246t.html">BC246T — A Serial Protocol Library for a Radio Scanner</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>Chernobyl Reactor Simulator — Modeling RBMK Physics in Pygame</h2>
+<span class="post-date">2026-06-18</span>
+<p>Inspired by <a href="https://www.youtube.com/watch?v=P3oKNE72EzU">Chernobyl Visually Explained</a>, I built a real-time Pygame simulation of the Chernobyl RBMK reactor disaster. It models nuclear fission, neutron moderation, control rod mechanics, water cooling, xenon poisoning, and the positive void coefficient — the design flaw that caused the 1986 disaster.</p>
+<p><img src="/img/chernobyl-sim.png" width="768" alt="Chernobyl Reactor Simulator - RBMK reactor simulation with neutrons flying through the core"></p>
+<p>The reactor runs at 60fps with hundreds of neutrons flying around in real time. You can control it manually with arrow keys, let a proportional controller manage it, or train a PPO reinforcement learning agent to hold a target power level.</p>
+<h2 id="whats-being-modeled">What's being modeled</h2>
+<p>The simulation is built on a 40×21 grid of uranium fuel cells. Each cell can be active (blue), depleted (gray), or poisoned by xenon-135 (black). Water sits behind each fuel cell, heating up as neutrons pass through it.</p>
+<p><strong>Fission</strong> — A thermal neutron (slow, black) hits an active uranium cell. The cell depletes, and 3 fast neutrons (white with black outline) fly out at random angles. That's the chain reaction: one neutron becomes three.</p>
+<p><strong>Neutron moderation</strong> — Fast neutrons can't cause fission. They need to be slowed down by bouncing off graphite moderator rods. When a fast neutron hits graphite, its speed drops to thermal and it changes type. This is the role graphite plays in RBMK reactors.</p>
+<p><strong>Control rods</strong> — 10 movable rods in two interleaved groups (A and B), each independently controlled. Each rod has three sections: a black absorber that kills neutrons on contact, a shaft that removes neutrons that pass through, and a graphite tip that moderates fast neutrons into thermal ones. The visual design — black absorber on top, white graphite below — makes it clear which part does what.</p>
+<p><strong>Water cooling</strong> — Each fuel cell has water behind it. Neutrons passing through heat it up (blue → orange → light red gradient). If water exceeds 200°, it evaporates and disappears. Water cools slowly when not being heated and returns after a random delay.</p>
+<p><strong>Positive void coefficient</strong> — The critical flaw of the RBMK reactor. When water evaporates, the collision radius for fission increases by 1.5×. Less water means more reactivity — a positive feedback loop that can cause runaway power excursions. This is the core educational concept of the simulation. Even a modest boost creates a feedback loop that can overwhelm control systems.</p>
+<p><strong>Xenon poisoning</strong> — After fission, depleted uranium becomes iodine-135, which decays into xenon-135. Xenon absorbs neutrons and stalls the reaction — the "xenon pit" that trapped operators during the disaster. Xenon burns away via neutron absorption but also decays naturally (simplified from the real 9.2-hour half-life).</p>
+<p><strong>Delayed neutrons</strong> — Depleted uranium emits neutrons at 0.01% chance per frame. This simplified model represents the delayed neutron precursors that are critical for reactor control in real life.</p>
+<h2 id="the-auto-control-challenge">The auto-control challenge</h2>
+<p>This was the hardest part. The goal: keep the reactor at a target neutron count (default 40 = 50% power) using control of two rod groups.</p>
+<p><strong>Attempt 1: Bang-bang controller</strong> — Simple thresholds. Below target raise rods, above target lower rods. Result: constant oscillation around the target. The rods were always moving at max speed in one direction or the other, never settling.</p>
+<p><strong>Attempt 2: Proportional controller</strong> — Scale rod movement by error magnitude: <code>adjustment = error × gain</code>. The gain (0.0002) was chosen so that at ±100 error the rods move at max speed, but near target they make small corrections. Problem: the controller was purely reactive — by the time it saw a large error, the reaction had already escalated.</p>
+<p><strong>Attempt 3: Proportional + deadband</strong> — Added a ±3 neutron deadband where rods don't move. This prevented jitter near target but didn't solve the startup burst problem.</p>
+<p><strong>Attempt 4: Proportional with predictive correction (final)</strong> — Instead of reacting to <code>current_count - target</code>, the controller reacts to <code>(current_count + trend) - target</code>. If neutrons are at 30 but rising fast (+20/frame), it sees a predicted error of +10 and starts inserting immediately — rather than waiting until neutrons actually overshoot.</p>
+<p>This was the key insight: predict the future state based on the current trend, and act preemptively. The rod speed is fixed at 0.003 per frame — at 60fps, full travel takes ~5.5 seconds. But a chain reaction can double in a fraction of a second. The predictive controller compensates for this physical limitation by acting early.</p>
+<h2 id="the-xenon-burnout-problem">The xenon burnout problem</h2>
+<p>Early versions suffered from a fatal flaw: after the initial startup burst, xenon would build up faster than it decayed, permanently poisoning the reactor. The reaction would limp along at 15-25 neutrons with rods fully withdrawn, unable to recover.</p>
+<p>Root causes: the startup burst was too severe (30% starting fuel × 840 cells = 252 active cells igniting simultaneously), there was no natural xenon decay (xenon could only burn away via neutron absorption, which was too slow at low neutron counts), and the reactivity boost was too high (2.5× made evaporated water cells 2.5× more reactive).</p>
+<p>Fixes: lowered the reactivity boost from 2.5 → 1.5, added natural xenon decay at 0.0008 chance per frame, raised the max water temperature from 100 → 200 (water takes longer to boil, reducing positive void feedback during bursts), and raised starting rod insertion from 0.5 → 0.9 (rods start mostly inserted, giving the controller more headroom).</p>
+<h2 id="log-viewer">Log viewer</h2>
+<p>A separate Pygame app reads the simulation log and displays 6 real-time line graphs: neutrons (total/fast/thermal), power %, rod insertion (group A and B), fuel/iodine/xenon counts, water temperature/evaporation, and error from target. Pan with arrow keys, zoom with scroll, and <code>--live</code> mode re-reads the log file every 0.5 seconds for watching runs in real time.</p>
+<p><img src="/img/chernobyl-viewer.png" width="768" alt="Chernobyl reactor log viewer with real-time line graphs"></p>
+<h2 id="rl-training">RL training</h2>
+<p>The reactor can also be controlled by a PPO reinforcement learning agent. The Gymnasium environment wraps the headless physics engine (<code>reactor.py</code>) with a 9-float observation vector (neutron count, rod positions, water temp, xenon count, target, error, trend) and continuous actions (±1 for each rod group). Reward is scaled by relative error from target, with +10 for on-target and -100 for reactor death.</p>
+<p>Training runs at ~200 steps/second on CPU. The model saves to <code>ppo_reactor.zip</code> and can be loaded back into the main simulation via <code>--auto</code>.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li><strong>Predictive control beats reactive control</strong> — Acting on the trend rather than the current state is essential when the system has momentum. The reactor doesn't respond instantly to rod movement, so the controller has to anticipate, not react.</li>
+<li><strong>Physical constraints shape control strategies</strong> — The fixed rod speed meant the controller had to predict the future. A faster rod would've made reactive control viable, but the constraint forced a better algorithm.</li>
+<li><strong>Xenon poisoning is a death spiral without natural decay</strong> — Low power → xenon accumulates → even lower power → more xenon. The natural decay rate had to be carefully tuned to match the iodine→xenon production rate. Without it, recovery was impossible.</li>
+<li><strong>The positive void coefficient is terrifying in practice</strong> — Even a 1.5× boost creates a feedback loop that can overwhelm control systems. The real RBMK had this same flaw, and watching it in simulation makes the disaster feel visceral.</li>
+<li><strong>Tuning is iterative</strong> — The final parameter set (gain, deadband, decay rates, boost factor) was the result of ~15 iterations, each informed by log analysis. The <code>--log</code> flag and viewer were essential for diagnosing problems.</li>
+<li><strong>NumPy vectorization makes real-time particle physics feasible in Python</strong> — Hundreds of neutrons processed per frame at 60fps, with vectorized distance checks between all neutrons and all active fuel cells simultaneously.</li>
+<li><strong>Separate physics from rendering</strong> — The shared <code>reactor.py</code> engine works headless for both the simulation and RL training, but the constants need to stay in sync between files. That divergence is a known issue.</li>
+</ul></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  <li>Contact: <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  <li>Feed: <a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  <li>Source: <a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  <li>Validation: <a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
