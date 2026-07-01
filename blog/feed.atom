@@ -4,10 +4,181 @@
   <link href="https://ryonsherman.github.io/" rel="alternate"/>
   <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
   <id>https://ryonsherman.github.io/</id>
-  <updated>2026-06-18T00:00:00Z</updated>
+  <updated>2026-07-01T00:00:00Z</updated>
   <author>
     <name>Ryon Sherman</name>
   </author>
+  
+  <entry>
+    <title>Slack LLM Chat — Persistent AI Conversations Inside Slack</title>
+    <link href="https://ryonsherman.github.io/blog/slack-llm-chat.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/slack-llm-chat.html</id>
+    <published>2026-07-01T00:00:00Z</published>
+    <updated>2026-07-01T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I wanted to chat with LLMs inside Slack without switching to a web browser. Existing solutions either didn't persist history, didn't support multiple providers, or made me leave the app I already live in. So I built a Slack bot that turns private channels into persistent AI conversations.</p>
+<h2>The problem</h2>
+<p>Chatting with LLMs usually means opening a browser, going to ChatGPT or Claude, and losing context when you close the tab. I wanted conversations that live where I already work — with history that survives restarts, multiple concurrent chats, and the ability to switch between cloud and local models.</p>
+<h2>Architecture</h2>
+<pre><code>User ↔ Slack (Socket Mode) ↔ Python App (Bolt) ↔ LLM Backend (OpenAI compat)
+                                    ↓
+                               SQLite (persistent)
+</code></pre>
+<p>The bot uses Socket Mode — a WebSocket connection instead of a public HTTP endpoint. No reverse proxy, no firewall rules, no port forwarding. It works behind any network.</p>
+<p>Each chat is a private channel. Only you and the bot can see it. No AI conversations exposed to the workspace.</p>
+<h2>The thread-to-channel pivot</h2>
+<p>I started with threads in a single <code>#llm-chats</code> channel. <code>/new</code> creates a thread, users reply in threads to continue. Simple.</p>
+<p>Then I discovered Slack blocks slash commands in threads. Users couldn't use <code>/model</code>, <code>/delete</code>, or <code>/provider</code> inside their chats. The entire UX broke.</p>
+<p>The fix was a complete architectural shift: <code>/new</code> now creates a private channel. Each channel IS the chat. Slash commands work, each conversation is visually separate, and the bot invites itself automatically. More channels in the workspace, but the tradeoff was worth it.</p>
+<h2>How it works</h2>
+<p>Thirteen slash commands control the bot:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/new [name]</code></td>
+<td>Create a private channel for a new chat</td>
+</tr>
+<tr>
+<td><code>/chats</code></td>
+<td>List your recent chats</td>
+</tr>
+<tr>
+<td><code>/delete</code></td>
+<td>Archive the current chat</td>
+</tr>
+<tr>
+<td><code>/provider</code></td>
+<td>Show or switch LLM provider</td>
+</tr>
+<tr>
+<td><code>/provider models</code></td>
+<td>List available models</td>
+</tr>
+<tr>
+<td><code>/model</code></td>
+<td>Switch models within the current provider</td>
+</tr>
+<tr>
+<td><code>/clear</code></td>
+<td>Wipe conversation history</td>
+</tr>
+<tr>
+<td><code>/title &lt;name&gt;</code></td>
+<td>Rename the chat</td>
+</tr>
+</tbody>
+</table>
+<p>Every chat stores its own provider and model in the database. You can use OpenCode Zen for one conversation and a local Qwen model for another. Switch mid-conversation with <code>/provider local</code>.</p>
+<p>When you send a message, the bot shows a typing indicator, streams the response token-by-token using Slack's native <code>say_stream()</code> API, and saves the full exchange to SQLite. The first message auto-generates a title — the bot asks the LLM to name the conversation in under 5 words, then updates the channel topic.</p>
+<p>Channel names are slugified from your input (<code>/new my project</code> → <code>llm-my-project</code>). Duplicates get a 6-character hash suffix to prevent collisions.</p>
+<h2>Docker integration</h2>
+<p>The bot runs alongside my existing <a href="/blog/ai-docker-stack.html">LLM Docker stack</a>. It connects to the LiteLLM proxy at <code>workstation1:8000/v1</code> — the same endpoint that powers Open WebUI and aider.</p>
+<pre><code class="language-yaml"># docker-compose.yml
+services:
+  slack-llm-bot:
+    build: .
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    restart: unless-stopped
+</code></pre>
+<p>The <code>.env</code> file points to both providers:</p>
+<pre><code class="language-bash"># Cloud — OpenCode Zen
+LLM_OPENCODE_API_BASE=https://opencode.ai/zen/go/v1
+LLM_OPENCODE_API_KEY=...
+
+# Local — LiteLLM from the Docker stack
+LLM_OPENAI_API_BASE=http://workstation1:8000/v1
+LLM_OPENAI_API_KEY=
+</code></pre>
+<p>Socket Mode means the bot needs no inbound HTTP connection. It connects outbound to Slack's WebSocket gateway, so it runs on any machine behind any firewall. The SQLite database lives in a mounted volume (<code>./data/chat.db</code>) with WAL mode for safe concurrent access.</p>
+<h2>Testing</h2>
+<p>Two-tier approach with pytest markers:</p>
+<pre><code class="language-bash">make test-fast     # 32 tests, ~0.5s — no LLM calls
+make test-llm      # 14 tests, ~37s — real LLM endpoints
+make test          # All 46 tests
+</code></pre>
+<p>The fast tests cover utilities, database operations, and provider configuration. The LLM tests hit real endpoints — OpenCode Zen or the local model — to validate message handling, model fetching, and provider switching. Both tiers have value: fast tests catch regressions instantly, slow tests confirm the integration actually works.</p>
+<h2>What I Learned</h2>
+<ul>
+<li>
+<p><strong>Platform limitations drive architecture</strong> — Slack's thread limitation forced a complete redesign. Always verify platform constraints early. What seems like a minor UI detail (threads vs channels) can force a total architectural change.</p>
+</li>
+<li>
+<p><strong>Socket Mode eliminates infrastructure</strong> — No public endpoint, no reverse proxy, no firewall configuration. The bot connects outbound via WebSocket and works from anywhere. This is the right choice for personal tools.</p>
+</li>
+<li>
+<p><strong>SQLite with WAL mode works fine in Docker</strong> — With a mounted volume and proper pragmas (<code>PRAGMA journal_mode=WAL</code>, <code>PRAGMA busy_timeout=5000</code>), SQLite handles concurrent access without issues. Don't reach for PostgreSQL unless you actually need it.</p>
+</li>
+<li>
+<p><strong>Per-chat provider switching is worth the complexity</strong> — Each chat storing its own provider and model feels natural. Using different models for different tasks — cloud for quick questions, local for sensitive code — is the default workflow.</p>
+</li>
+<li>
+<p><strong>Slack's <code>say_stream()</code> is purpose-built for AI</strong> — Don't simulate streaming with <code>chat.update</code> loops. Accumulate tokens in a buffer, flush every ~50 characters, and let Slack handle the rendering. The native API does exactly what you need.</p>
+</li>
+<li>
+<p><strong>Two-tier testing catches different things</strong> — Mocked fast tests verify logic. Real LLM tests verify the integration actually works. The 37-second penalty for LLM tests is worth the confidence.</p>
+</li>
+</ul></content>
+  </entry>
+  
+  <entry>
+    <title>Chernobyl Reactor Simulator — Modeling RBMK Physics in Pygame</title>
+    <link href="https://ryonsherman.github.io/blog/chernobyl-sim.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/chernobyl-sim.html</id>
+    <published>2026-06-18T00:00:00Z</published>
+    <updated>2026-06-18T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>Inspired by <a href="https://www.youtube.com/watch?v=P3oKNE72EzU">Chernobyl Visually Explained</a>, I built a real-time Pygame simulation of the Chernobyl RBMK reactor disaster. It models nuclear fission, neutron moderation, control rod mechanics, water cooling, xenon poisoning, and the positive void coefficient — the design flaw that caused the 1986 disaster.</p>
+<p><img src="/img/chernobyl-sim.png" width="768" alt="Chernobyl Reactor Simulator - RBMK reactor simulation with neutrons flying through the core"></p>
+<p>The reactor runs at 60fps with hundreds of neutrons flying around in real time. You can control it manually with arrow keys, let a proportional controller manage it, or train a PPO reinforcement learning agent to hold a target power level.</p>
+<h2>What's being modeled</h2>
+<p>The simulation is built on a 40×21 grid of uranium fuel cells. Each cell can be active (blue), depleted (gray), or poisoned by xenon-135 (black). Water sits behind each fuel cell, heating up as neutrons pass through it.</p>
+<p><strong>Fission</strong> — A thermal neutron (slow, black) hits an active uranium cell. The cell depletes, and 3 fast neutrons (white with black outline) fly out at random angles. That's the chain reaction: one neutron becomes three.</p>
+<p><strong>Neutron moderation</strong> — Fast neutrons can't cause fission. They need to be slowed down by bouncing off graphite moderator rods. When a fast neutron hits graphite, its speed drops to thermal and it changes type. This is the role graphite plays in RBMK reactors.</p>
+<p><strong>Control rods</strong> — 10 movable rods in two interleaved groups (A and B), each independently controlled. Each rod has three sections: a black absorber that kills neutrons on contact, a shaft that removes neutrons that pass through, and a graphite tip that moderates fast neutrons into thermal ones. The visual design — black absorber on top, white graphite below — makes it clear which part does what.</p>
+<p><strong>Water cooling</strong> — Each fuel cell has water behind it. Neutrons passing through heat it up (blue → orange → light red gradient). If water exceeds 200°, it evaporates and disappears. Water cools slowly when not being heated and returns after a random delay.</p>
+<p><strong>Positive void coefficient</strong> — The critical flaw of the RBMK reactor. When water evaporates, the collision radius for fission increases by 1.5×. Less water means more reactivity — a positive feedback loop that can cause runaway power excursions. This is the core educational concept of the simulation. Even a modest boost creates a feedback loop that can overwhelm control systems.</p>
+<p><strong>Xenon poisoning</strong> — After fission, depleted uranium becomes iodine-135, which decays into xenon-135. Xenon absorbs neutrons and stalls the reaction — the "xenon pit" that trapped operators during the disaster. Xenon burns away via neutron absorption but also decays naturally (simplified from the real 9.2-hour half-life).</p>
+<p><strong>Delayed neutrons</strong> — Depleted uranium emits neutrons at 0.01% chance per frame. This simplified model represents the delayed neutron precursors that are critical for reactor control in real life.</p>
+<h2>The auto-control challenge</h2>
+<p>This was the hardest part. The goal: keep the reactor at a target neutron count (default 40 = 50% power) using control of two rod groups.</p>
+<p><strong>Attempt 1: Bang-bang controller</strong> — Simple thresholds. Below target raise rods, above target lower rods. Result: constant oscillation around the target. The rods were always moving at max speed in one direction or the other, never settling.</p>
+<p><strong>Attempt 2: Proportional controller</strong> — Scale rod movement by error magnitude: <code>adjustment = error × gain</code>. The gain (0.0002) was chosen so that at ±100 error the rods move at max speed, but near target they make small corrections. Problem: the controller was purely reactive — by the time it saw a large error, the reaction had already escalated.</p>
+<p><strong>Attempt 3: Proportional + deadband</strong> — Added a ±3 neutron deadband where rods don't move. This prevented jitter near target but didn't solve the startup burst problem.</p>
+<p><strong>Attempt 4: Proportional with predictive correction (final)</strong> — Instead of reacting to <code>current_count - target</code>, the controller reacts to <code>(current_count + trend) - target</code>. If neutrons are at 30 but rising fast (+20/frame), it sees a predicted error of +10 and starts inserting immediately — rather than waiting until neutrons actually overshoot.</p>
+<p>This was the key insight: predict the future state based on the current trend, and act preemptively. The rod speed is fixed at 0.003 per frame — at 60fps, full travel takes ~5.5 seconds. But a chain reaction can double in a fraction of a second. The predictive controller compensates for this physical limitation by acting early.</p>
+<h2>The xenon burnout problem</h2>
+<p>Early versions suffered from a fatal flaw: after the initial startup burst, xenon would build up faster than it decayed, permanently poisoning the reactor. The reaction would limp along at 15-25 neutrons with rods fully withdrawn, unable to recover.</p>
+<p>Root causes: the startup burst was too severe (30% starting fuel × 840 cells = 252 active cells igniting simultaneously), there was no natural xenon decay (xenon could only burn away via neutron absorption, which was too slow at low neutron counts), and the reactivity boost was too high (2.5× made evaporated water cells 2.5× more reactive).</p>
+<p>Fixes: lowered the reactivity boost from 2.5 → 1.5, added natural xenon decay at 0.0008 chance per frame, raised the max water temperature from 100 → 200 (water takes longer to boil, reducing positive void feedback during bursts), and raised starting rod insertion from 0.5 → 0.9 (rods start mostly inserted, giving the controller more headroom).</p>
+<h2>Log viewer</h2>
+<p>A separate Pygame app reads the simulation log and displays 6 real-time line graphs: neutrons (total/fast/thermal), power %, rod insertion (group A and B), fuel/iodine/xenon counts, water temperature/evaporation, and error from target. Pan with arrow keys, zoom with scroll, and <code>--live</code> mode re-reads the log file every 0.5 seconds for watching runs in real time.</p>
+<p><img src="/img/chernobyl-viewer.png" width="768" alt="Chernobyl reactor log viewer with real-time line graphs"></p>
+<h2>RL training</h2>
+<p>The reactor can also be controlled by a PPO reinforcement learning agent. The Gymnasium environment wraps the headless physics engine (<code>reactor.py</code>) with a 9-float observation vector (neutron count, rod positions, water temp, xenon count, target, error, trend) and continuous actions (±1 for each rod group). Reward is scaled by relative error from target, with +10 for on-target and -100 for reactor death.</p>
+<p>Training runs at ~200 steps/second on CPU. The model saves to <code>ppo_reactor.zip</code> and can be loaded back into the main simulation via <code>--auto</code>.</p>
+<h2>What I Learned</h2>
+<ul>
+<li><strong>Predictive control beats reactive control</strong> — Acting on the trend rather than the current state is essential when the system has momentum. The reactor doesn't respond instantly to rod movement, so the controller has to anticipate, not react.</li>
+<li><strong>Physical constraints shape control strategies</strong> — The fixed rod speed meant the controller had to predict the future. A faster rod would've made reactive control viable, but the constraint forced a better algorithm.</li>
+<li><strong>Xenon poisoning is a death spiral without natural decay</strong> — Low power → xenon accumulates → even lower power → more xenon. The natural decay rate had to be carefully tuned to match the iodine→xenon production rate. Without it, recovery was impossible.</li>
+<li><strong>The positive void coefficient is terrifying in practice</strong> — Even a 1.5× boost creates a feedback loop that can overwhelm control systems. The real RBMK had this same flaw, and watching it in simulation makes the disaster feel visceral.</li>
+<li><strong>Tuning is iterative</strong> — The final parameter set (gain, deadband, decay rates, boost factor) was the result of ~15 iterations, each informed by log analysis. The <code>--log</code> flag and viewer were essential for diagnosing problems.</li>
+<li><strong>NumPy vectorization makes real-time particle physics feasible in Python</strong> — Hundreds of neutrons processed per frame at 60fps, with vectorized distance checks between all neutrons and all active fuel cells simultaneously.</li>
+<li><strong>Separate physics from rendering</strong> — The shared <code>reactor.py</code> engine works headless for both the simulation and RL training, but the constants need to stay in sync between files. That divergence is a known issue.</li>
+</ul></content>
+  </entry>
   
   <entry>
     <title>Rebound — Training Neural Network Bots with PPO</title>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/slack-llm-chat.html">Slack LLM Chat — Persistent AI Conversations Inside Slack</a></li>
+  
+    <li><a href="/blog/chernobyl-sim.html">Chernobyl Reactor Simulator — Modeling RBMK Physics in Pygame</a></li>
+  
+    <li><a href="/blog/rebound-nn.html">Rebound — Training Neural Network Bots with PPO</a></li>
+  
+    <li><a href="/blog/matryoshka-crypt.html">Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</a></li>
+  
+    <li><a href="/blog/nn-racer.html">NN Racer — Teaching a Neural Network to Drive with Evolution</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/bc246t.html">BC246T — A Serial Protocol Library for a Radio Scanner</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>Slack LLM Chat — Persistent AI Conversations Inside Slack</h2>
+<span class="post-date">2026-07-01</span>
+<p>I wanted to chat with LLMs inside Slack without switching to a web browser. Existing solutions either didn't persist history, didn't support multiple providers, or made me leave the app I already live in. So I built a Slack bot that turns private channels into persistent AI conversations.</p>
+<h2 id="the-problem">The problem</h2>
+<p>Chatting with LLMs usually means opening a browser, going to ChatGPT or Claude, and losing context when you close the tab. I wanted conversations that live where I already work — with history that survives restarts, multiple concurrent chats, and the ability to switch between cloud and local models.</p>
+<h2 id="architecture">Architecture</h2>
+<pre><code>User ↔ Slack (Socket Mode) ↔ Python App (Bolt) ↔ LLM Backend (OpenAI compat)
+                                    ↓
+                               SQLite (persistent)
+</code></pre>
+<p>The bot uses Socket Mode — a WebSocket connection instead of a public HTTP endpoint. No reverse proxy, no firewall rules, no port forwarding. It works behind any network.</p>
+<p>Each chat is a private channel. Only you and the bot can see it. No AI conversations exposed to the workspace.</p>
+<h2 id="the-thread-to-channel-pivot">The thread-to-channel pivot</h2>
+<p>I started with threads in a single <code>#llm-chats</code> channel. <code>/new</code> creates a thread, users reply in threads to continue. Simple.</p>
+<p>Then I discovered Slack blocks slash commands in threads. Users couldn't use <code>/model</code>, <code>/delete</code>, or <code>/provider</code> inside their chats. The entire UX broke.</p>
+<p>The fix was a complete architectural shift: <code>/new</code> now creates a private channel. Each channel IS the chat. Slash commands work, each conversation is visually separate, and the bot invites itself automatically. More channels in the workspace, but the tradeoff was worth it.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>Thirteen slash commands control the bot:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/new [name]</code></td>
+<td>Create a private channel for a new chat</td>
+</tr>
+<tr>
+<td><code>/chats</code></td>
+<td>List your recent chats</td>
+</tr>
+<tr>
+<td><code>/delete</code></td>
+<td>Archive the current chat</td>
+</tr>
+<tr>
+<td><code>/provider</code></td>
+<td>Show or switch LLM provider</td>
+</tr>
+<tr>
+<td><code>/provider models</code></td>
+<td>List available models</td>
+</tr>
+<tr>
+<td><code>/model</code></td>
+<td>Switch models within the current provider</td>
+</tr>
+<tr>
+<td><code>/clear</code></td>
+<td>Wipe conversation history</td>
+</tr>
+<tr>
+<td><code>/title &lt;name&gt;</code></td>
+<td>Rename the chat</td>
+</tr>
+</tbody>
+</table>
+<p>Every chat stores its own provider and model in the database. You can use OpenCode Zen for one conversation and a local Qwen model for another. Switch mid-conversation with <code>/provider local</code>.</p>
+<p>When you send a message, the bot shows a typing indicator, streams the response token-by-token using Slack's native <code>say_stream()</code> API, and saves the full exchange to SQLite. The first message auto-generates a title — the bot asks the LLM to name the conversation in under 5 words, then updates the channel topic.</p>
+<p>Channel names are slugified from your input (<code>/new my project</code> → <code>llm-my-project</code>). Duplicates get a 6-character hash suffix to prevent collisions.</p>
+<h2 id="docker-integration">Docker integration</h2>
+<p>The bot runs alongside my existing <a href="/blog/ai-docker-stack.html">LLM Docker stack</a>. It connects to the LiteLLM proxy at <code>workstation1:8000/v1</code> — the same endpoint that powers Open WebUI and aider.</p>
+<pre><code class="language-yaml"># docker-compose.yml
+services:
+  slack-llm-bot:
+    build: .
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    restart: unless-stopped
+</code></pre>
+<p>The <code>.env</code> file points to both providers:</p>
+<pre><code class="language-bash"># Cloud — OpenCode Zen
+LLM_OPENCODE_API_BASE=https://opencode.ai/zen/go/v1
+LLM_OPENCODE_API_KEY=...
+
+# Local — LiteLLM from the Docker stack
+LLM_OPENAI_API_BASE=http://workstation1:8000/v1
+LLM_OPENAI_API_KEY=
+</code></pre>
+<p>Socket Mode means the bot needs no inbound HTTP connection. It connects outbound to Slack's WebSocket gateway, so it runs on any machine behind any firewall. The SQLite database lives in a mounted volume (<code>./data/chat.db</code>) with WAL mode for safe concurrent access.</p>
+<h2 id="testing">Testing</h2>
+<p>Two-tier approach with pytest markers:</p>
+<pre><code class="language-bash">make test-fast     # 32 tests, ~0.5s — no LLM calls
+make test-llm      # 14 tests, ~37s — real LLM endpoints
+make test          # All 46 tests
+</code></pre>
+<p>The fast tests cover utilities, database operations, and provider configuration. The LLM tests hit real endpoints — OpenCode Zen or the local model — to validate message handling, model fetching, and provider switching. Both tiers have value: fast tests catch regressions instantly, slow tests confirm the integration actually works.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li>
+<p><strong>Platform limitations drive architecture</strong> — Slack's thread limitation forced a complete redesign. Always verify platform constraints early. What seems like a minor UI detail (threads vs channels) can force a total architectural change.</p>
+</li>
+<li>
+<p><strong>Socket Mode eliminates infrastructure</strong> — No public endpoint, no reverse proxy, no firewall configuration. The bot connects outbound via WebSocket and works from anywhere. This is the right choice for personal tools.</p>
+</li>
+<li>
+<p><strong>SQLite with WAL mode works fine in Docker</strong> — With a mounted volume and proper pragmas (<code>PRAGMA journal_mode=WAL</code>, <code>PRAGMA busy_timeout=5000</code>), SQLite handles concurrent access without issues. Don't reach for PostgreSQL unless you actually need it.</p>
+</li>
+<li>
+<p><strong>Per-chat provider switching is worth the complexity</strong> — Each chat storing its own provider and model feels natural. Using different models for different tasks — cloud for quick questions, local for sensitive code — is the default workflow.</p>
+</li>
+<li>
+<p><strong>Slack's <code>say_stream()</code> is purpose-built for AI</strong> — Don't simulate streaming with <code>chat.update</code> loops. Accumulate tokens in a buffer, flush every ~50 characters, and let Slack handle the rendering. The native API does exactly what you need.</p>
+</li>
+<li>
+<p><strong>Two-tier testing catches different things</strong> — Mocked fast tests verify logic. Real LLM tests verify the integration actually works. The 37-second penalty for LLM tests is worth the confidence.</p>
+</li>
+</ul></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  <li>Contact: <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  <li>Feed: <a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  <li>Source: <a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  <li>Validation: <a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
