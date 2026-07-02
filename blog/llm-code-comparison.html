@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Ryon Sherman</title>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="alternate" href="/feed.atom" title="Feed" type="application/atom+xml" >
+    <link rel="stylesheet" href="/etc/css/app.min.css">
+    <style>
+      html { scroll-behavior: smooth; }</style>
+  </head>
+  <body id="top">
+    <!-- Header -->
+    <div id="header">
+      <h1><a href="/">Ryon Sherman</a></h1>
+      <span>with sufficient thrust, pigs fly just fine</span>
+    </div>
+    <!-- End Header -->
+
+    <!-- Side Bar -->
+    <div id="sidebar">
+      <div class="container">
+      <div class="title">Recent Articles</div>
+<div class="blog content">
+  <ul>
+  
+    <li><a href="/blog/llm-code-comparison.html">LLM Code Comparison — Pitting 3 Coding Models Against the Same Spec</a></li>
+  
+    <li><a href="/blog/custom-firmware.html">Custom Firmware — Building a Programming Language Stack for Arduino Nano</a></li>
+  
+    <li><a href="/blog/slack-llm-chat.html">Slack LLM Chat — Persistent AI Conversations Inside Slack</a></li>
+  
+    <li><a href="/blog/chernobyl-sim.html">Chernobyl Reactor Simulator — Modeling RBMK Physics in Pygame</a></li>
+  
+    <li><a href="/blog/rebound-nn.html">Rebound — Training Neural Network Bots with PPO</a></li>
+  
+    <li><a href="/blog/matryoshka-crypt.html">Matryoshka Crypt — Nested Encryption Layers Like a Russian Doll</a></li>
+  
+    <li><a href="/blog/nn-racer.html">NN Racer — Teaching a Neural Network to Drive with Evolution</a></li>
+  
+    <li><a href="/blog/voxscript.html">Voxscript — A CLI Script-to-Speech Tool with Piper TTS</a></li>
+  
+    <li><a href="/blog/rebound-game.html">Rebound — A 4-Player Multiplayer Cannon Game</a></li>
+  
+    <li><a href="/blog/qrvid.html">QRVid — Store Binary Data in QR Code Videos</a></li>
+  
+    <li><a href="/blog/hello-world.html">Hello World — Noise, a Minimal Static Site Generator</a></li>
+  
+    <li><a href="/blog/hardware-rng.html">Hardware RNG — SRAM PUF True Random Number Generator</a></li>
+  
+    <li><a href="/blog/gps-tracker.html">GPS Asset Tracker — An Arduino-Based Logger with EEPROM Storage</a></li>
+  
+    <li><a href="/blog/enigma.html">Enigma — A Simulated Enigma Machine in Python</a></li>
+  
+    <li><a href="/blog/cryptboard.html">cryptboard — Public Encrypted Dead Drops Over GitHub</a></li>
+  
+    <li><a href="/blog/canary-proof-of-life.html">Canary — A Cryptographic Proof-of-Life Android App</a></li>
+  
+    <li><a href="/blog/bc246t.html">BC246T — A Serial Protocol Library for a Radio Scanner</a></li>
+  
+    <li><a href="/blog/arduino-wifi-jammer.html">Arduino Wi-Fi Jammer — A 13-Node Distributed Jamming Swarm</a></li>
+  
+    <li><a href="/blog/utorrent-bridge.html">uTorrent Bridge — A Compatibility Layer Nobody Asked For</a></li>
+  
+    <li><a href="/blog/fogmud.html">FogMUD — Building a Modern Telnet MUD From Scratch</a></li>
+  
+    <li><a href="/blog/ai-docker-stack.html">Running LLMs and Image Generation on Consumer Hardware — A Two-Machine Docker Stack</a></li>
+  
+  </ul>
+</div>
+      </div>
+    </div>
+    <!-- End Side Bar -->
+
+    <!-- Content -->
+    <div id="content">
+      <div class="container">
+<h2>LLM Code Comparison — Pitting 3 Coding Models Against the Same Spec</h2>
+<span class="post-date">2026-07-02</span>
+<p>I gave three different coding LLMs the exact same project specification and compared what they built. Two rounds, two project types, three models, six projects. The goal wasn't to test whether they can reverse a linked list — it was to find out which one builds better software.</p>
+<h2 id="the-setup">The setup</h2>
+<p>Each model received the same spec verbatim in a fresh session. Build a single <code>index.html</code> with vanilla HTML/CSS/JS, zero external dependencies, must work from <code>file://</code>. After building, each model acted as its own code reviewer for 2-3 iterative self-review cycles. Then I evaluated everything across automated metrics, Playwright browser testing, and human visual ranking.</p>
+<p>Two rounds, each with its own spec:</p>
+<ul>
+<li><strong>Round 1:</strong> Sorting Algorithm Visualizer — animate sorting algorithms as colored bars with controls and stats</li>
+<li><strong>Round 2:</strong> System Monitor Dashboard — simulated real-time system metrics with gauge, bar, sparkline, and numeric panels</li>
+</ul>
+<p>Scoring was weighted: Correctness (3x), Feature Breadth (2x), Code Quality (2x), UI Polish (1x).</p>
+<h2 id="the-models">The models</h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Config</th>
+<th>R1 Algorithms</th>
+<th>R2 Cycles</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MiMo-V2.5</td>
+<td><code>opencode-go/mimo-v2.5</code></td>
+<td>4</td>
+<td>2</td>
+</tr>
+<tr>
+<td>DeepSeek V4 Flash</td>
+<td><code>opencode-go/deepseek-v4-flash</code></td>
+<td>5</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Big Pickle</td>
+<td><code>opencode/big-pickle</code></td>
+<td>6</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<h2 id="round-1-sorting-algorithm-visualizer">Round 1: Sorting Algorithm Visualizer</h2>
+<p>The spec called for at least 4 sorting algorithms (Bubble, Selection, Merge, Quick), an array of adjustable-size bars, and controls for sorting, speed, and stats.</p>
+<p>Every model delivered something that worked. The differences were in the details.</p>
+<p><strong>Big Pickle</strong> shipped 6 algorithms including Heap Sort — a bonus beyond the spec. A "Status" line showed Idle → Sorting... → Complete/Stopped with real-time feedback. Turbomode instantly completed the sort while still counting operations. The Stop button disabled at rest and enabled during sort — a clean UX pattern. Its CSS was remarkably compact at 63 lines. The only blemish: sorting a single-element array showed "Stopped" instead of "Complete."</p>
+<p><strong>DeepSeek V4 Flash</strong> was the only model to use an IIFE module pattern for scope isolation. It had the cleanest visual design of the three despite fewer UI features — no Stop button, no live time counter. An "Instant" button bypassed animation but showed 0 comparisons and 0 writes, effectively bypassing its own instrumentation. Its CSS was 121 lines.</p>
+<p><strong>MiMo-V2.5</strong> had the most features — order presets (Random, Nearly Sorted, Reversed), manual array entry with a toggle, a size slider with live numeric readout. The Stop button existed but was CSS-hidden at rest (<code>display: none</code>), appearing only during a sort. It also had the most code: 222 lines of CSS, 708 lines total. The visual design was functional but busier.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>MiMo</th>
+<th>DeepSeek</th>
+<th>Big Pickle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Algorithms</td>
+<td>4</td>
+<td>5</td>
+<td>6</td>
+</tr>
+<tr>
+<td>CSS lines</td>
+<td>222</td>
+<td>121</td>
+<td>63</td>
+</tr>
+<tr>
+<td>JS errors</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Scores: Big Pickle 36, DeepSeek 35, MiMo 32.</p>
+<h2 id="round-2-system-monitor-dashboard">Round 2: System Monitor Dashboard</h2>
+<p>The spec called for a dashboard with CPU, Memory, Disk, and Network panels — each with a different visual style (gauge, bar, sparkline, numeric) — plus pause/resume, speed control, a spike button, and data export.</p>
+<p><strong>DeepSeek</strong> took Round 2 decisively. Zero JS errors. The most compact CSS at 116 lines. Export functionality that downloaded a clean CSV. A status indicator showing "Paused" vs "Live." Speed and history window dropdowns instead of sliders. A last-update timestamp. Clean function separation throughout.</p>
+<p><strong>Big Pickle</strong> used SVG for the CPU gauge instead of a canvas arc — a different technical approach that worked. Toast notifications appeared on spike events. But it was missing Export entirely and had no visible clock or timestamp. Pause may not have fully frozen the simulation data.</p>
+<p><strong>MiMo</strong> had the most UI chrome — a live clock, gauge plus trend chart in every panel, a footer, speed slider (0.5x to 4x), and export. But it also had 13 recurring JS errors: <code>addColorStop('var(--green)')</code>. CSS custom properties don't resolve in the Canvas API — they pass through as literal strings. The canvas gradients were silently broken. The bug was documented in MiMo's own self-review as "Low risk" and shipped anyway.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>MiMo</th>
+<th>DeepSeek</th>
+<th>Big Pickle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File size</td>
+<td>26,146 B</td>
+<td>25,981 B</td>
+<td>23,848 B</td>
+</tr>
+<tr>
+<td>CSS lines</td>
+<td>403</td>
+<td>116</td>
+<td>283</td>
+</tr>
+<tr>
+<td>JS errors</td>
+<td>13</td>
+<td>0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Scores: DeepSeek 37, Big Pickle 31, MiMo 27.</p>
+<h2 id="the-self-review-paradox">The self-review paradox</h2>
+<p>One of the most interesting findings: models acting as their own code reviewers.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Cycles</th>
+<th>Issues Found</th>
+<th>Shipped Bugs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DeepSeek</td>
+<td>3</td>
+<td>52</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Big Pickle</td>
+<td>3</td>
+<td>12</td>
+<td>0 (minor edge case)</td>
+</tr>
+<tr>
+<td>MiMo</td>
+<td>2</td>
+<td>10</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p>DeepSeek's 3 review cycles caught and fixed everything, including edge cases in spike simulation and canvas DPR scaling. Big Pickle's review caught the CSS-var-in-Canvas bug before it shipped. MiMo's review documented the same bug and labelled it "low risk."</p>
+<p>Review thoroughness correlated strongly with final quality. More cycles meant fewer bugs. But the real insight: acceptance criteria matter more than cycle count. If the model decides a bug is acceptable, it ships — even when the model itself found and documented the bug.</p>
+<h2 id="the-css-vars-in-canvas-trap">The CSS-vars-in-Canvas trap</h2>
+<p>Both MiMo and Big Pickle independently tried using CSS custom properties in Canvas API calls. CSS variables like <code>var(--green)</code> are incredibly useful, and it's intuitive to try using them everywhere. But Canvas 2D context doesn't resolve CSS custom properties — they pass as literal strings. The gradient code compiled without errors and produced no output.</p>
+<p>Only Big Pickle caught it in review. Two out of three models made the same mistake, which suggests this isn't random — it's a systematic blind spot in how these models reason about web platform APIs.</p>
+<h2 id="final-rankings">Final rankings</h2>
+<table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>Model</th>
+<th>R1 Score</th>
+<th>R2 Score</th>
+<th>Combined</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>DeepSeek V4 Flash</td>
+<td>35</td>
+<td>37</td>
+<td><strong>72</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Big Pickle</td>
+<td>36</td>
+<td>31</td>
+<td><strong>67</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>MiMo-V2.5</td>
+<td>32</td>
+<td>27</td>
+<td><strong>59</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>DeepSeek V4 Flash</strong> was the most consistent performer across both rounds — zero JS errors in either project, the best architecture discipline (IIFE module pattern), and the most compact CSS. Not the most feature-rich in either round, but everything it shipped worked perfectly. The minimalist approach paid off.</p>
+<p><strong>Big Pickle</strong> was the feature leader in Round 1 (6 algorithms including bonus Heap Sort) but fell behind in Round 2 by omitting Export and a clock. Its self-review caught the CSS-var-in-Canvas bug before it shipped. Edge cases were the weak spot — sorting a single-element array showed "Stopped" instead of "Complete."</p>
+<p><strong>MiMo-V2.5</strong> had the most UI chrome and the most ambitious feature set in both rounds. Order presets, manual array entry, live clock, export, speed control — it shipped everything. But preventable bugs (CSS vars in Canvas) and code bloat (312 average CSS lines) held it back. Its own review documented the Canvas bug as "low risk" and shipped it anyway.</p>
+<h2 id="what-i-learned">What I Learned</h2>
+<ul>
+<li>
+<p><strong>Architecture discipline is the clearest signal of code quality</strong> — The only model that used an IIFE module pattern (DeepSeek) was also the cleanest overall. Scope isolation correlated perfectly with every other quality metric.</p>
+</li>
+<li>
+<p><strong>AI self-review is only as good as its acceptance criteria</strong> — MiMo's review documented the CSS-var-in-Canvas bug as "low risk" and shipped it. A known, documented bug in production code. The model decided it was acceptable, not that it missed it.</p>
+</li>
+<li>
+<p><strong>Canvas and CSS are separate rendering systems</strong> — Two of three models independently tried using CSS custom properties in Canvas API calls. The platforms look similar but aren't. This is a systematic blind spot, not random chance.</p>
+</li>
+<li>
+<p><strong>Feature breadth has a real cost</strong> — The model with the most features (MiMo) also had the only shipped bugs. The model with the fewest features (DeepSeek) had zero errors across both rounds. More code means more surface area for bugs.</p>
+</li>
+<li>
+<p><strong>More CSS didn't mean better-looking UI</strong> — DeepSeek's 118 average CSS lines outranked MiMo's 312 visually. Clean layout and good spacing beat decoration and chrome every time.</p>
+</li>
+<li>
+<p><strong>Review cycles matter more than model architecture</strong> — DeepSeek's 3 cycles caught every edge case. MiMo's 2 cycles let a visible bug through. The process of reviewing and correcting is as important as the model's ability to generate code in the first place.</p>
+</li>
+<li>
+<p><strong>Benchmarks don't measure what matters</strong> — Every model could implement Quick Sort. None of them would fail an isolated algorithm test. But real-world software engineering is about edge cases, cross-feature interaction, code organization, and knowing when to use — and when not to use — CSS custom properties in Canvas API calls.</p>
+</li>
+</ul></div>
+    </div>
+    <!-- End Content -->
+
+    <!-- Footer -->
+    <div id="footer">
+      <div class="container">
+      <span class="return"><a href="#top" title="Return to Top">&#8613;</a></span>
+<ul class="contact">
+  <li>Contact: <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#114;&#121;&#111;&#110;&#46;&#115;&#104;&#101;&#114;&#109;&#97;&#110;&#48;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">
+    echo gmail.com | sed 's/^/ryon.sherman@/'
+  </a></li>
+</ul>
+<ul class="feeds">
+  <li>Feed: <a href="/blog/feed.atom">blog</a></li>
+</ul>
+<ul class="archive">
+  <li>Source: <a href="https://github.com/ryonsherman/ryonsherman.github.io">git</a></li>
+</ul>
+<ul class="validation">
+  <li>Validation: <a href="https://validator.w3.org/nu/?doc=https://ryonsherman.github.io/">HTML5</a></li>
+  <li><a href="https://jigsaw.w3.org/css-validator/validator?uri=https://ryonsherman.github.io/">CSS3</a></li>
+  <li><a href="https://validator.w3.org/feed/check.cgi?url=https://ryonsherman.github.io/blog/feed.atom">Atom</a></li>
+</ul>
+<span class="copyright">&copy; 2013-2026</span>
+      </div>
+    </div>
+    <!-- End Footer -->
+  </body>
+</html>
