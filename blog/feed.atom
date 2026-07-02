@@ -4,10 +4,128 @@
   <link href="https://ryonsherman.github.io/" rel="alternate"/>
   <link href="https://ryonsherman.github.io/blog/feed.atom" rel="self"/>
   <id>https://ryonsherman.github.io/</id>
-  <updated>2026-07-01T00:00:00Z</updated>
+  <updated>2026-07-02T00:00:00Z</updated>
   <author>
     <name>Ryon Sherman</name>
   </author>
+  
+  <entry>
+    <title>Custom Firmware — Building a Programming Language Stack for Arduino Nano</title>
+    <link href="https://ryonsherman.github.io/blog/custom-firmware.html" rel="alternate"/>
+    <id>https://ryonsherman.github.io/blog/custom-firmware.html</id>
+    <published>2026-07-02T00:00:00Z</published>
+    <updated>2026-07-02T00:00:00Z</updated>
+    <author>
+      <name>Ryon Sherman</name>
+    </author>
+    <content type="html"><p>I built a complete programming language stack for an Arduino Nano. A BASIC compiler, a custom assembly language, a two-pass assembler, a stack-based bytecode VM, and firmware that runs on the ATmega328P — all from scratch. No parser generators, no VM libraries, no shortcuts.</p>
+<h2>The full stack</h2>
+<pre><code>BASIC source (.bas)             10 LET A = A + 1
+    ↓  compiler.py
+Assembly language (.asm)        load A / push 1 / add / store A
+    ↓  assembler.py
+Bytecode binary (.bin)          08 00 01 01 04 09 00
+    ↓  either:
+    ├── emulator.py (Python VM on PC)
+    └── uploader → serial → Arduino firmware (C++ VM)
+</code></pre>
+<p>The compiler outputs assembly text, not bytecode directly. This was intentional — you can inspect the generated assembly and understand exactly what the compiler is doing before the assembler turns it into opaque bytes.</p>
+<p>The BASIC dialect supports LET, PRINT, INPUT, IF/THEN/GOTO, FOR/NEXT/STEP, GOSUB/RETURN, END, and full arithmetic expressions with operator precedence. A program like this compiles down to 23 bytes of bytecode:</p>
+<pre><code class="language-basic">10 LET A = 0
+20 LET A = A + 1
+30 PRINT A
+40 IF A &lt; 10 THEN GOTO 20
+50 END
+</code></pre>
+<h2>Why a stack machine</h2>
+<p>Three architectures were on the table: a register machine (complex decode, lots of bits for register selection), a stack machine (simple decode, operands always on top of stack), or transpiling to C (no firmware needed but hides the hardware layer).</p>
+<p>The stack machine won because instructions are shorter (no register fields), decode logic is simpler (opcode → action, no operand selection), and expression evaluation maps directly to stack operations (<code>a + b * c</code> becomes <code>push a, push b, push c, mul, add</code>). The tradeoff: more instructions per program and genuinely awkward temporary value management in hand-written assembly.</p>
+<p>The instruction set ended up at 21 opcodes across seven categories: stack operations, arithmetic, variables, comparison, control flow, I/O, and subroutines. All values are 16-bit signed integers — 8-bit felt too constrained (-128 to 127), and 32-bit wastes too much of the Nano's 2KB of RAM.</p>
+<h2>The tools</h2>
+<p>The <strong>lexer</strong> is a character-by-character tokenizer that recognizes keywords (LET, PRINT, IF, FOR, etc.) against a set. Multi-character operators (<code>&lt;=</code>, <code>&gt;=</code>, <code>&lt;&gt;</code>) peek ahead one character.</p>
+<p>The <strong>parser</strong> is recursive descent — one function per grammar rule. <code>_expr_addsub()</code> handles <code>+</code> and <code>-</code>, <code>_expr_term()</code> handles <code>*</code> and <code>/</code>, <code>_expr_factor()</code> handles numbers, variables, parentheses, and unary minus. Operator precedence emerges from the call hierarchy: <code>addsub → term → factor</code>. Higher-precedence operators are deeper in the call chain.</p>
+<p>The <strong>assembler</strong> is two-pass. Pass one finds all labels and records their byte addresses while tracking instruction sizes. Pass two encodes instructions and resolves label references to addresses. Each instruction has a known byte length (1, 2, or 3 bytes). A single off-by-one in pass one shifts every subsequent label by one byte, breaking all jump targets.</p>
+<p>The <strong>emulator</strong> runs on the PC with an optional trace mode that prints every instruction — address, mnemonic, operand, and full stack state — making opaque execution readable:</p>
+<pre><code>[0x0000] PUSH   0            stack: [0]
+[0x0002] STORE  A            stack: []
+[0x0004] LOAD   A            stack: [1]
+[0x0006] PUSH   1            stack: [1, 1]
+[0x0008] ADD               stack: [2]
+[0x0009] STORE  A            stack: []
+</code></pre>
+<h2>Making it fit in 2KB</h2>
+<p>The ATmega328P has 2KB of RAM. Every byte matters. The memory budget was:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Program storage (bytecode)</td>
+<td>1024 bytes</td>
+</tr>
+<tr>
+<td>Data stack (64 × int16)</td>
+<td>128 bytes</td>
+</tr>
+<tr>
+<td>Return stack (32 × int16)</td>
+<td>64 bytes</td>
+</tr>
+<tr>
+<td>Variables (26 × int16)</td>
+<td>52 bytes</td>
+</tr>
+<tr>
+<td>Serial line buffer</td>
+<td>64 bytes</td>
+</tr>
+<tr>
+<td><strong>Subtotal</strong></td>
+<td><strong>1332 bytes</strong></td>
+</tr>
+<tr>
+<td>Free</td>
+<td>~519 bytes</td>
+</tr>
+</tbody>
+</table>
+<p>The firmware itself compiled to 3,278 bytes of flash — 10% of the 32KB program memory.</p>
+<h2>The serial protocol</h2>
+<p>The Arduino receives bytecode over a single UART pin. The protocol is minimal: two sync bytes (0xAA, 0x55), a 2-byte program length, then the program bytes. The firmware stores them in RAM, resets the VM state, and starts executing. PRINT and PRINTS output over serial. INPUT reads a line. HALT sends "DONE" and waits for the next upload.</p>
+<p>The sync bytes prevent the receiver from interpreting random noise as valid data. This mattered — opening a serial port from Python asserts the DTR line, which resets the Arduino. The boot message gets sent while the host is still opening the port and gets lost. The uploader has to wait 2 seconds after opening before sending the program.</p>
+<h2>The bugs that made it real</h2>
+<p>The first version of unary minus compiled <code>-value</code> as <code>push value; push 0; sub</code> — which computes <code>value - 0 = value</code>, not <code>0 - value = -value</code>. This made every negative STEP in a FOR loop positive. Countdown loops ran upward forever. It took two sessions to find.</p>
+<p>FOR/NEXT without STEP was initially missing. The compiler required STEP on every loop. Hours of debugging revealed it was a missing default case — STEP 1 should be implicit when no STEP is given.</p>
+<p>The bare-metal firmware attempt told a different story. Stripping the Arduino core reduced flash usage from 3,278 bytes to 1,804 bytes — a 45% reduction. The UART registers were straightforward to program. But the CH340 USB-serial chip on the Nano clone has inconsistent timing requirements. After the DTR reset and bootloader timeout, the CH340 needs a stabilization period before the host can reliably receive data. The code is correct — verified at the assembly level — but output arrives inconsistently across runs. The issue lives in the interaction between the CH340 driver, macOS serial port timing, and the hardware reset sequence.</p>
+<h2>What I Learned</h2>
+<ul>
+<li>
+<p><strong>Fetch-decode-execute is not an abstraction</strong> — It's literally what happens on every instruction at every level, from the laptop's x86 to the Nano's AVR to a toy VM. Implementing it yourself makes that concrete in a way no textbook can.</p>
+</li>
+<li>
+<p><strong>Recursive descent parsing maps directly to grammar rules</strong> — One function per rule. Operator precedence is just function call order. <code>_expr_addsub()</code> calls <code>_expr_term()</code> which calls <code>_expr_factor()</code>. Multiplication binds tighter than addition because <code>_expr_term</code> is deeper in the call chain. That's the entire mechanism.</p>
+</li>
+<li>
+<p><strong>The SUB operand order bug was inevitable</strong> — A stack machine's SUB pops the top value (the second operand) and the second value (the first operand). Natural reading order (<code>PUSH 10, PUSH 3, SUB</code> = 7) works for literals but breaks for unary negation. <code>0 - value</code> requires pushing 0 first, then the value. Getting this wrong caused the longest debugging session in the project.</p>
+</li>
+<li>
+<p><strong>2KB RAM forces real tradeoffs</strong> — You can't add another buffer. You can't use dynamic allocation. The memory budget table was a real document, not a theoretical exercise. Every allocation had to be justified.</p>
+</li>
+<li>
+<p><strong>The CH340 taught me about hardware debugging</strong> — The UART init code was correct. The disassembly was correct. The bug lived in the USB-serial chip's power-on timing behavior, not in the AVR code. Bare-metal debugging requires thinking at every layer simultaneously, from register setup to driver timing.</p>
+</li>
+<li>
+<p><strong>A two-pass assembler is the right complexity for this scale</strong> — Labels can be referenced before they're defined. The first pass only measures instruction sizes; the second pass fills in addresses. Forward references are resolved without a linker because there's no separate compilation. The simplicity is the elegance.</p>
+</li>
+<li>
+<p><strong>Test on the emulator first</strong> — Every bug found on the Nano was harder to diagnose than the same bug on the emulator. The trace mode (printing every instruction with stack state) was the single most valuable debugging tool in the entire project.</p>
+</li>
+</ul></content>
+  </entry>
   
   <entry>
     <title>Slack LLM Chat — Persistent AI Conversations Inside Slack</title>
